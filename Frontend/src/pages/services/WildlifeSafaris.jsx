@@ -392,9 +392,11 @@ const WildlifeSafaris = () => {
                     {info.content}
                   </p>
                   <div className="flex space-x-4">
+                    <Link to="/book">
                     <button className="px-6 py-3 bg-gradient-to-r from-yellow-500 to-amber-600 rounded-full font-medium hover:from-yellow-600 hover:to-amber-700 transition-all">
                       Book This Activity
                     </button>
+                    </Link>
                     <button className="px-6 py-3 bg-transparent border border-yellow-500 text-yellow-400 rounded-full font-medium hover:bg-yellow-500/10 transition-all">
                       View Gallery
                     </button>
@@ -550,16 +552,20 @@ const WildlifeSafaris = () => {
               Book your {service.name} experience with Smile Sri Lanka and witness the incredible wildlife of our beautiful island.
             </p>
             <div className="flex flex-col sm:flex-row justify-center gap-4">
+              <Link to="/book">
               <button 
                 className="px-8 py-4 bg-white text-yellow-700 font-bold rounded-full hover:bg-yellow-50 transition-all transform hover:scale-105 shadow-lg"
               >
                 Book Now - {service.price}
               </button>
+              </Link>
+               <Link to="/contact">
               <button 
                 className="px-8 py-4 bg-transparent border-2 border-white text-white font-bold rounded-full hover:bg-white/10 transition-all"
               >
                 Contact Us
               </button>
+              </Link>
             </div>
           </div>
         </div>

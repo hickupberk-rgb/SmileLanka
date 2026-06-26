@@ -264,7 +264,7 @@ const PackageTemplate = () => {
         {
           title: "Historic Galle Fort",
           content: "Explore the UNESCO World Heritage Galle Fort, a perfectly preserved 17th-century fortress built by the Portuguese and later expanded by the Dutch. Wander through the cobblestone streets, admire the colonial architecture, visit the Maritime Museum, and enjoy panoramic views from the fort walls. The fort is a living testament to Sri Lanka's maritime history.",
-          image: "https://i.pinimg.com/1200x/3d/de/89/3dde89d9ca8c25c8c08d9ba780d7ccee.jpg"
+          image: "https://i.pinimg.com/736x/23/7a/7b/237a7b52854312546872cf2306d50241.jpg"
         },
         {
           title: "Coastal Beaches & Villages",

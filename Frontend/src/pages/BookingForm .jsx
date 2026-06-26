@@ -6,16 +6,19 @@ import emailjs from "emailjs-com";
 import { useLocation } from "react-router-dom";
 
 const services = [
-  { name: "Tour Package", price: 0 },
-  { name: "Hotel Room", price: 0 },
-  { name: "Vehicle Booking", price: 0 },
+  { name: "Cultural Triangle Explorer", price: 999 },
+  { name: "Hill Country Retreat", price: 899 },
+  { name: "Beach Paradise Getaway", price: 1299 },
+  { name: "Wildlife Safari Adventure", price: 1499 },
+  { name: "Southern Coast Explorer", price: 1199 },
+  { name: "Ultimate Sri Lanka Experience", price: 2499 },
 ];
 
 const steps = ["Personal Info", "Booking Details", "Payment", "Review"];
 
-
 const AdvancedBookingWizard = () => {
   const location = useLocation();
+  const today = new Date().toISOString().split("T")[0];
   const [step, setStep] = useState(0);
   const [data, setData] = useState({
     name: "",
@@ -32,48 +35,57 @@ const AdvancedBookingWizard = () => {
     payLater: false,
   });
   const [errors, setErrors] = useState({});
+  const [userId, setUserId] = useState(null);
 
   // Pre-select package service if coming from a package page
-  useEffect(() => {
-    const params = new URLSearchParams(location.search);
-    const packageId = params.get('package');
-    
-    if (packageId) {
-      // Map package IDs to service names
-      const packageServices = {
-        "1": "Cultural Triangle Explorer",
-        "2": "Hill Country Retreat",
-        "3": "Beach Paradise Getaway",
-        "4": "Wildlife Safari Adventure",
-        "5": "Southern Coast Explorer",
-        "6": "Ultimate Sri Lanka Experience"
-      };
-      
-      const serviceName = packageServices[packageId];
-      if (serviceName) {
-        setData(prevData => ({
-          ...prevData,
-          service: serviceName
-        }));
-      }
-    }
-  }, [location]);
+useEffect(() => {
+  const params = new URLSearchParams(location.search);
+  const packageId = params.get("package");
 
-  const blockInvalidKeys = {
-    name: (e) => {
-      if (!/^[A-Za-z\s]$/.test(e.key) && e.key !== "Backspace") e.preventDefault();
-    },
-    numberOnly: (e) => {
-      if (!/[0-9]/.test(e.key) && e.key !== "Backspace") e.preventDefault();
-    },
-    expiry: (e) => {
-      if (!/[0-9/]/.test(e.key) && e.key !== "Backspace") e.preventDefault();
-    },
-  };
+  if (packageId) {
+    const packageServices = {
+      "1": "Cultural Triangle Explorer",
+      "2": "Hill Country Retreat",
+      "3": "Beach Paradise Getaway",
+      "4": "Wildlife Safari Adventure",
+      "5": "Southern Coast Explorer",
+      "6": "Ultimate Sri Lanka Experience",
+    };
+
+    const serviceName = packageServices[packageId];
+
+    if (serviceName) {
+      setData((prev) => ({
+        ...prev,
+        service: serviceName,
+      }));
+    }
+  }
+
+  // ✅ SAFE USER ID (ONLY MongoDB ObjectId allowed)
+const storedUserId = localStorage.getItem("userId");
+
+// validate + cleanup
+if (storedUserId && !/^[0-9a-fA-F]{24}$/.test(storedUserId)) {
+  localStorage.removeItem("userId");
+}
+}, [location]);
 
   const handleChange = (e) => {
-    setData({ ...data, [e.target.name]: e.target.value });
-    setErrors({ ...errors, [e.target.name]: "" });
+    const { name, value } = e.target;
+
+    let updatedValue = value;
+
+    if (name === "name") {
+      updatedValue = value.replace(/[^A-Za-z\s]/g, "");
+    }
+
+    if (name === "phone") {
+      updatedValue = value.replace(/[^0-9]/g, "");
+    }
+
+    setData({ ...data, [name]: updatedValue });
+    setErrors({ ...errors, [name]: "" });
   };
 
   const handleGuests = (val) => {
@@ -83,18 +95,28 @@ const AdvancedBookingWizard = () => {
     }));
   };
 
+  // -------------------------
+  // VALIDATION
+  // -------------------------
   const validateStep = () => {
     let stepErrors = {};
 
     if (step === 0) {
-      if (!data.name) stepErrors.name = "Name is required";
-      if (!data.email.match(/^\S+@\S+\.\S+$/)) stepErrors.email = "Invalid email";
-      if (!data.phone.match(/^[0-9]{10,}$/)) stepErrors.phone = "Invalid phone";
+      if (!data.name.trim()) stepErrors.name = "Name is required";
+
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.email)) {
+        stepErrors.email = "Invalid email address";
+      }
+
+      if (!/^[0-9]{10}$/.test(data.phone)) {
+        stepErrors.phone = "Phone must be exactly 10 digits";
+      }
     }
 
-    if (step === 1 && !data.service) stepErrors.service = "Select a service";
+    if (step === 1 && !data.service) {
+      stepErrors.service = "Select a service";
+    }
 
-    // Payment validation can be added if needed
     setErrors(stepErrors);
     return Object.keys(stepErrors).length === 0;
   };
@@ -111,7 +133,7 @@ const AdvancedBookingWizard = () => {
   };
 
   // ✅ Move sendBookingEmail inside the component
-  const sendBookingEmail = () => {
+  const sendBookingEmail = async () => {
     const templateParams = {
       name: data.name,
       email: data.email,
@@ -125,40 +147,152 @@ const AdvancedBookingWizard = () => {
       total: getTotalPrice(),
     };
 
-    emailjs
-      .send(
-        "service_ixwmqt5",
-        "template_rwyii24",
-        templateParams,
-        "-MTJEE6Jjw5sZMNmw"
-      )
-       .then(
-              () => {
-                toast.success("Message sent successfully!", {
-                  position: "top-center",
-                  autoClose: 4000,
-                  style: {
-                    background: "#facc15", 
-                    color: "#000000",
-                    fontWeight: "bold",
-                    fontSize: "16px",
-                  },
-                  icon: "✅",
-                  
-                });
-                
-              },
-   (error) => {
-           toast.error("❌ Failed to send message. Please try again.", {
-             position: "bottom-center",
-             autoClose: 4000,
-             style: { background: "#FF4C4C", color: "#fff", fontWeight: "bold" },
-             progressStyle: { background: "#facc15" },
-             icon: "⚠️",
-           });
-         }
-       );
-   };
+    try {
+      // First, register or verify the user
+     let currentUserId = userId;
+
+// 🔥 STEP 1: CHECK IF USER EXISTS IN DB
+const userCheck = await fetch(
+  `http://localhost:5000/check-user?email=${data.email}`
+);
+
+const userCheckData = await userCheck.json();
+
+if (userCheckData.exists) {
+  // ✅ USER EXISTS → reuse same ID
+  currentUserId = userCheckData.user._id;
+  setUserId(currentUserId);
+  localStorage.setItem("userId", currentUserId);
+} else {
+  // 🔥 NEW USER → register
+  const registerResponse = await fetch("http://localhost:5000/register", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      name: data.name,
+      email: data.email,
+      phone: data.phone,
+    }),
+  });
+
+  const registerData = await registerResponse.json();
+
+  if (!registerResponse.ok) {
+    throw new Error(registerData.error || "Failed to register user");
+  }
+
+  currentUserId = registerData.userId;
+
+  localStorage.setItem("userId", currentUserId);
+  setUserId(currentUserId);
+}
+        // Register new user
+        
+//       const registerResponse = await fetch("http://localhost:5000/register", {
+//   method: "POST",
+//   headers: {
+//     "Content-Type": "application/json",
+//   },
+//   body: JSON.stringify({
+//     name: data.name,
+//     email: data.email,
+//     phone: data.phone,
+//   }),
+// });
+
+// const registerData = await registerResponse.json();
+
+// if (!registerResponse.ok) {
+//   throw new Error(registerData.error || "Failed to register user");
+// }
+
+// // ✅ ALWAYS use MongoDB ID
+// const newUserId = registerData.userId;
+
+// if (!newUserId) {
+//   throw new Error("User ID not returned from server");
+// }
+
+// currentUserId = newUserId;
+
+// // save correct id only
+// localStorage.setItem("userId", currentUserId);
+// setUserId(currentUserId);
+//       }
+      
+      // Record the booking
+      const bookingResponse = await fetch("http://localhost:5000/book", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          userId: currentUserId,
+          service: data.service,
+          date: data.date,
+          guests: data.guests
+        }),
+      });
+      
+      const bookingData = await bookingResponse.json();
+      if (!bookingResponse.ok) {
+        throw new Error(bookingData.error || "Failed to record booking");
+      }
+      
+      // Add User ID to email template parameters
+      const emailTemplateParams = {
+        ...templateParams,
+        userId: currentUserId
+      };
+      
+      // Send email notification with User ID
+      try {
+        await emailjs.send(
+          "service_ixwmqt5",
+          "template_rwyii24",
+          emailTemplateParams,
+          "-MTJEE6Jjw5sZMNmw"
+        );
+        
+        toast.success("Booking confirmed successfully!", {
+          position: "top-center",
+          autoClose: 5000,
+          style: {
+            background: "#facc15", 
+            color: "#000000",
+            fontWeight: "bold",
+            fontSize: "16px",
+          },
+          icon: "✅",
+        });
+      } catch (emailError) {
+        console.error("Email sending failed:", emailError);
+        // Fallback: Show User ID in toast if email fails
+        toast.success(`Booking confirmed successfully! Your User ID is: ${currentUserId}. Please save this for accessing the gallery.`, {
+          position: "top-center",
+          autoClose: 7000,
+          style: {
+            background: "#facc15", 
+            color: "#000000",
+            fontWeight: "bold",
+            fontSize: "16px",
+          },
+          icon: "✅",
+        });
+      }
+    } catch (error) {
+      console.error("Booking failed:", error);
+      toast.error(`❌ Booking failed: ${error.message}. Please try again.`, {
+        position: "bottom-center",
+        autoClose: 4000,
+        style: { background: "#FF4C4C", color: "#fff", fontWeight: "bold" },
+        progressStyle: { background: "#facc15" },
+        icon: "⚠️",
+      });
+    }
+  };
 
   const animatedDiv = {
     initial: { opacity: 0, y: 50 },
@@ -172,7 +306,7 @@ const AdvancedBookingWizard = () => {
       className="min-h-screen flex justify-center items-center bg-cover bg-center p-5"
       style={{
         backgroundImage:
-          "url('https://images.pexels.com/photos/1526717/pexels-photo-1526717.jpeg')",
+          "url('https://i.pinimg.com/1200x/0c/52/ae/0c52ae9947137589b5574a0a515bc451.jpg')",
       }}
     >
       <ToastContainer />
@@ -205,7 +339,7 @@ const AdvancedBookingWizard = () => {
                     name="name"
                     value={data.name}
                     onChange={handleChange}
-                    onKeyDown={blockInvalidKeys.name}
+                    // onKeyDown={blockInvalidKeys.name}
                     placeholder="Full Name"
                     className="w-full px-4 py-3 border rounded-lg peer"
                   />
@@ -226,7 +360,7 @@ const AdvancedBookingWizard = () => {
                   name="phone"
                   value={data.phone}
                   onChange={handleChange}
-                  onKeyDown={blockInvalidKeys.numberOnly}
+                  // onKeyDown={blockInvalidKeys.numberOnly}
                   placeholder="Phone Number"
                   className="w-full px-4 py-3 border rounded-lg"
                 />
@@ -252,7 +386,7 @@ const AdvancedBookingWizard = () => {
                   ))}
                 </select>
                 {errors.service && <p className="text-red-500 text-sm">{errors.service}</p>}
-                <input type="date" name="date" value={data.date} onChange={handleChange} className="w-full px-4 py-3 border rounded-lg text-black" />
+                <input type="date" name="date" value={data.date} onChange={handleChange} min={today} className="w-full px-4 py-3 border rounded-lg text-black" />
                 <input type="time" name="time" value={data.time} onChange={handleChange} className="w-full px-4 py-3 border rounded-lg text-black" />
                 <div className="flex items-center gap-3">
                   <button type="button" onClick={() => handleGuests(-1)} className="px-3 py-1 bg-gray-500 rounded">-</button>
@@ -346,6 +480,15 @@ const AdvancedBookingWizard = () => {
       <div className="bg-yellow-400 text-black p-5 rounded-xl shadow-lg text-center">
         <h3 className="text-xl font-bold">Total Amount</h3>
         <p className="text-3xl font-extrabold mt-1">${getTotalPrice()}</p>
+      </div>
+      
+      {/* Gallery Access Info */}
+      <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+        <h3 className="text-lg font-bold text-blue-800 mb-2">📸 Share Your Memories!</h3>
+        <p className="text-blue-700">
+          After your tour, you'll be able to upload your photos to our gallery and share your 
+          amazing Sri Lankan adventure with other travelers!
+        </p>
       </div>
       
     </div>
