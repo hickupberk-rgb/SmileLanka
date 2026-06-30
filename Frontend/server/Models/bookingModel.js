@@ -1,32 +1,35 @@
-import User from "./models/User.js";
-import Booking from "./models/Booking.js";
+import mongoose from "mongoose";
 
-app.post("/book", async (req, res) => {
-  try {
-    const { userId, service, date, guests } = req.body;
-
-    const user = await User.findById(userId);
-
-    if (!user) {
-      return res.status(400).json({
-        error: "Invalid user ID",
-        received: userId,
-      });
-    }
-
-    const booking = await Booking.create({
-      userId,
-      service,
-      date,
-      guests,
-    });
-
-    res.json({
-      bookingId: booking._id,
-      message: "Booking confirmed",
-    });
-
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+const bookingSchema = new mongoose.Schema({
+  userId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "User",
+    required: true,
+  },
+  service: {
+    type: String,
+    required: true,
+  },
+  date: {
+    type: String,
+    required: true,
+  },
+  guests: {
+    type: Number,
+    required: true,
+  },
+  status: {
+    type: String,
+    default: "Pending",
+  },
+  amount: {
+    type: Number,
+    default: 0,
+  },
+  createdAt: {
+    type: Date,
+    default: Date.now,
+  },
 });
+
+export default mongoose.model("Booking", bookingSchema);

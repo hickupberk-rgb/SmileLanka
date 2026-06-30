@@ -8,6 +8,7 @@ const Navbar = () => {
   const [show, setShow] = useState(true);
   const [focusedIndex, setFocusedIndex] = useState(-1);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [isAdminLoggedIn, setIsAdminLoggedIn] = useState(false);
   const location = useRouterLocation();
   const navigate = useRouterNavigate();
   const navItems = ["home", "about", "destinations", "contact", "gallery"];
@@ -66,6 +67,15 @@ const Navbar = () => {
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
+  useEffect(() => {
+    try {
+      const session = JSON.parse(localStorage.getItem("smilelanka_admin_session") || "null");
+      setIsAdminLoggedIn(Boolean(session?.email && session?.role === "admin"));
+    } catch (error) {
+      setIsAdminLoggedIn(false);
+    }
+  }, [location.pathname]);
+
   // Determine if we're on the home page
   const isHomePage = location.pathname === "/";
 
@@ -119,6 +129,15 @@ const Navbar = () => {
             Contact Us
           </RouterLink>
         )}
+      </li>
+      <li className="hover:text-yellow-400 cursor-pointer transition-colors duration-300 font-medium">
+        <RouterLink
+          to={isAdminLoggedIn ? "/admin" : "/admin/auth"}
+          className="block h-full w-full py-3 px-4 rounded-xl bg-amber-500/20 text-amber-200 hover:bg-amber-500/30 transition-all"
+          onClick={() => setMobileMenuOpen(false)}
+        >
+          {isAdminLoggedIn ? "Dashboard" : "Admin"}
+        </RouterLink>
       </li>
     </>
   );

@@ -37,6 +37,9 @@ import CityExploration from "./pages/services/CityExploration.jsx";
 import WaterSports from "./pages/services/WaterSports.jsx";
 import BookingForm from "./pages/BookingForm .jsx";
 import CustomTour from "./pages/CustomTour.jsx";
+import AdminAuthPage from "./pages/admin/AdminAuthPage.jsx";
+import AdminDashboard from "./pages/admin/AdminDashboard.jsx";
+import ProtectedAdminRoute from "./components/ProtectedAdminRoute.jsx";
 
 const App = () => {
   const [loading, setLoading] = useState(true);
@@ -86,6 +89,10 @@ const App = () => {
                 <Route path="/gallery-upload" element={<GalleryUpload />} />
                 <Route path="/destinations/galle-fort" element={<GalleFort />} />
                 <Route path="/book" element={<BookingForm/>} />
+                <Route path="/admin/auth" element={<AdminAuthPage />} />
+                <Route element={<ProtectedAdminRoute />}>
+                  <Route path="/admin" element={<AdminDashboard />} />
+                </Route>
 
                 {/* Individual destination routes */}
                 <Route path="/destinations/sigiriya-rock-fortress" element={<SigiriyaRockFortress />} />
