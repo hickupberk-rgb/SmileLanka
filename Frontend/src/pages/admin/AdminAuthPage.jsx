@@ -10,6 +10,7 @@ const AdminAuthPage = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [form, setForm] = useState({ name: "", email: "", password: "", confirmPassword: "" });
   const [error, setError] = useState("");
+  const [adminExists, setAdminExists] = useState(true);
 
   useEffect(() => {
     const session = localStorage.getItem(SESSION_KEY);
@@ -23,6 +24,20 @@ const AdminAuthPage = () => {
         localStorage.removeItem(SESSION_KEY);
       }
     }
+
+    const checkAdminSetup = async () => {
+      try {
+        const response = await fetch("http://localhost:5000/admin/exists");
+        const data = await response.json();
+        setAdminExists(Boolean(data.exists));
+        setMode(data.exists ? "login" : "register");
+      } catch (error) {
+        setAdminExists(true);
+        setMode("login");
+      }
+    };
+
+    checkAdminSetup();
   }, [navigate]);
 
   const handleChange = (event) => {
@@ -36,7 +51,7 @@ const AdminAuthPage = () => {
 
     if (mode === "register") {
       if (!form.name.trim() || !form.email.trim() || !form.password.trim()) {
-        setError("Please fill every field before registering.");
+        setError("Please fill every field before creating the first admin account.");
         return;
       }
 
@@ -67,7 +82,7 @@ const AdminAuthPage = () => {
           return;
         }
 
-        localStorage.setItem(SESSION_KEY, JSON.stringify(data.admin));
+        localStorage.setItem(SESSION_KEY, JSON.stringify({ ...data.admin, token: data.token }));
         navigate("/admin");
       } catch (error) {
         setError("Unable to connect to server. Make sure the backend is running.");
@@ -91,7 +106,7 @@ const AdminAuthPage = () => {
         return;
       }
 
-      localStorage.setItem(SESSION_KEY, JSON.stringify(data.admin));
+      localStorage.setItem(SESSION_KEY, JSON.stringify({ ...data.admin, token: data.token }));
       navigate("/admin");
     } catch (error) {
       setError("Unable to connect to server. Make sure the backend is running.");
@@ -117,33 +132,21 @@ const AdminAuthPage = () => {
 
           <div className="mt-8 rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-slate-300">
             <p className="font-semibold text-white">Secure admin access</p>
-            <p className="mt-2">Create a real admin account or login with an existing one stored in MongoDB.</p>
+            <p className="mt-2">Only an existing admin account can access this dashboard.</p>
           </div>
         </div>
 
         <div className="flex-1 p-8 lg:p-10">
-          <div className="mb-6 flex items-center justify-between">
-            <div>
-              <p className="text-sm uppercase tracking-[0.3em] text-amber-300">{mode === "login" ? "Login" : "Register"}</p>
-              <h2 className="text-2xl font-semibold text-white">Admin portal</h2>
-            </div>
-            <div className="flex rounded-full border border-white/10 bg-white/5 p-1">
-              <button
-                type="button"
-                onClick={() => setMode("login")}
-                className={`rounded-full px-3 py-1.5 text-sm transition ${mode === "login" ? "bg-amber-400 text-black" : "text-slate-300"}`}
-              >
-                Login
-              </button>
-              <button
-                type="button"
-                onClick={() => setMode("register")}
-                className={`rounded-full px-3 py-1.5 text-sm transition ${mode === "register" ? "bg-amber-400 text-black" : "text-slate-300"}`}
-              >
-                Register
-              </button>
-            </div>
+          <div className="mb-6">
+            <p className="text-sm uppercase tracking-[0.3em] text-amber-300">{mode === "login" ? "Login" : "Create first admin"}</p>
+            <h2 className="text-2xl font-semibold text-white">Admin portal</h2>
           </div>
+
+          {!adminExists && (
+            <div className="mb-4 rounded-2xl border border-amber-400/30 bg-amber-400/10 px-3 py-2 text-sm text-amber-100">
+              No admin account exists yet. Create the first admin account to enter the dashboard.
+            </div>
+          )}
 
           <form className="space-y-4" onSubmit={handleSubmit}>
             {mode === "register" && (
@@ -206,15 +209,12 @@ const AdminAuthPage = () => {
             {error && <p className="rounded-2xl border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-200">{error}</p>}
 
             <button type="submit" className="w-full rounded-2xl bg-amber-400 px-4 py-3 font-semibold text-black transition hover:bg-amber-300">
-              {mode === "login" ? "Login to dashboard" : "Create admin account"}
+              {mode === "login" ? "Login to dashboard" : "Create first admin"}
             </button>
           </form>
 
           <p className="mt-4 text-sm text-slate-400">
-            {mode === "login" ? "Need a new admin account?" : "Already have access?"}{" "}
-            <button type="button" onClick={() => setMode(mode === "login" ? "register" : "login")} className="font-semibold text-amber-300">
-              {mode === "login" ? "Register here" : "Login here"}
-            </button>
+            {mode === "login" ? "Only existing admins can sign in to this dashboard." : "This creates the initial admin account for the dashboard."}
           </p>
 
           <Link to="/" className="mt-5 inline-flex text-sm text-slate-400 transition hover:text-amber-300">

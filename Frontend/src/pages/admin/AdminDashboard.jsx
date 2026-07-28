@@ -14,6 +14,7 @@ const AdminDashboard = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [updatingBookingId, setUpdatingBookingId] = useState(null);
+  const [activeFilter, setActiveFilter] = useState("All");
 
   useEffect(() => {
     const session = localStorage.getItem(SESSION_KEY);
@@ -39,10 +40,17 @@ const AdminDashboard = () => {
 
   const fetchDashboardData = async () => {
     try {
+      const session = JSON.parse(localStorage.getItem(SESSION_KEY) || "null");
+      const authHeaders = session?.token ? { Authorization: `Bearer ${session.token}` } : {};
+
       const [bookingsResponse, statsResponse] = await Promise.all([
-        fetch("http://localhost:5000/admin/bookings"),
-        fetch("http://localhost:5000/admin/stats"),
+        fetch("http://localhost:5000/admin/bookings", { headers: authHeaders }),
+        fetch("http://localhost:5000/admin/stats", { headers: authHeaders }),
       ]);
+
+      if (!bookingsResponse.ok || !statsResponse.ok) {
+        throw new Error("Admin session expired");
+      }
 
       const bookingsData = await bookingsResponse.json();
       const statsData = await statsResponse.json();
@@ -67,6 +75,12 @@ const AdminDashboard = () => {
     { label: "Revenue", value: formatCurrency(stats.revenue), icon: Wallet },
   ];
 
+  const pendingCount = bookings.filter((booking) => booking.status === "Pending").length;
+  const confirmedCount = bookings.filter((booking) => booking.status === "Confirmed").length;
+  const filteredBookings = activeFilter === "All"
+    ? bookings
+    : bookings.filter((booking) => booking.status === activeFilter);
+
   const logout = () => {
     localStorage.removeItem(SESSION_KEY);
     navigate("/admin/auth");
@@ -76,9 +90,13 @@ const AdminDashboard = () => {
     setUpdatingBookingId(bookingId);
 
     try {
+      const session = JSON.parse(localStorage.getItem(SESSION_KEY) || "null");
       const response = await fetch(`http://localhost:5000/admin/bookings/${bookingId}/status`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(session?.token ? { Authorization: `Bearer ${session.token}` } : {}),
+        },
         body: JSON.stringify({ status: nextStatus }),
       });
 
@@ -167,21 +185,31 @@ const AdminDashboard = () => {
 
             <section className="mt-8 grid gap-6 xl:grid-cols-[1.3fr_0.7fr]">
               <div className="rounded-[28px] border border-white/10 bg-white/5 p-4 sm:p-6">
-                <div className="mb-4 flex items-center justify-between">
+                <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div>
                     <h2 className="text-xl font-semibold text-white">Recent bookings</h2>
                     <p className="text-sm text-slate-400">Manage upcoming travel requests with ease.</p>
                   </div>
-                  <button type="button" className="rounded-full border border-amber-400/30 bg-amber-400/10 px-3 py-1.5 text-sm text-amber-200">Export</button>
+                  <div className="flex flex-wrap gap-2">
+                    <button type="button" onClick={() => setActiveFilter("All")} className={`rounded-full px-3 py-1.5 text-sm ${activeFilter === "All" ? "bg-amber-400 text-black" : "border border-white/10 bg-slate-900/70 text-slate-300"}`}>
+                      All
+                    </button>
+                    <button type="button" onClick={() => setActiveFilter("Pending")} className={`rounded-full px-3 py-1.5 text-sm ${activeFilter === "Pending" ? "bg-amber-400 text-black" : "border border-white/10 bg-slate-900/70 text-slate-300"}`}>
+                      Pending
+                    </button>
+                    <button type="button" onClick={() => setActiveFilter("Confirmed")} className={`rounded-full px-3 py-1.5 text-sm ${activeFilter === "Confirmed" ? "bg-amber-400 text-black" : "border border-white/10 bg-slate-900/70 text-slate-300"}`}>
+                      Confirmed
+                    </button>
+                  </div>
                 </div>
 
                 <div className="space-y-3">
                   {loading ? (
                     <p className="rounded-2xl border border-white/10 bg-slate-950/70 p-4 text-sm text-slate-400">Loading bookings from MongoDB...</p>
-                  ) : bookings.length === 0 ? (
-                    <p className="rounded-2xl border border-white/10 bg-slate-950/70 p-4 text-sm text-slate-400">No bookings have been saved yet.</p>
+                  ) : filteredBookings.length === 0 ? (
+                    <p className="rounded-2xl border border-white/10 bg-slate-950/70 p-4 text-sm text-slate-400">No bookings match this filter yet.</p>
                   ) : (
-                    bookings.map((booking) => (
+                    filteredBookings.map((booking) => (
                       <div key={booking._id} className="rounded-2xl border border-white/10 bg-slate-950/70 p-4">
                         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                           <div>
@@ -230,13 +258,17 @@ const AdminDashboard = () => {
                 <div className="rounded-[28px] border border-white/10 bg-white/5 p-5">
                   <h3 className="font-semibold text-white">Quick actions</h3>
                   <div className="mt-4 space-y-2 text-sm text-slate-300">
-                    <button type="button" className="flex w-full items-center justify-between rounded-2xl border border-white/10 bg-slate-950/70 px-4 py-3 hover:border-amber-400/40">
-                      <span>Approve pending tours</span>
-                      <span className="text-amber-300">5</span>
+                    <button type="button" onClick={() => setActiveFilter("Pending")} className="flex w-full items-center justify-between rounded-2xl border border-white/10 bg-slate-950/70 px-4 py-3 hover:border-amber-400/40">
+                      <span>Review pending requests</span>
+                      <span className="text-amber-300">{pendingCount}</span>
                     </button>
-                    <button type="button" className="flex w-full items-center justify-between rounded-2xl border border-white/10 bg-slate-950/70 px-4 py-3 hover:border-amber-400/40">
-                      <span>Send itinerary updates</span>
-                      <span className="text-amber-300">3</span>
+                    <button type="button" onClick={() => setActiveFilter("Confirmed")} className="flex w-full items-center justify-between rounded-2xl border border-white/10 bg-slate-950/70 px-4 py-3 hover:border-amber-400/40">
+                      <span>Check confirmed bookings</span>
+                      <span className="text-amber-300">{confirmedCount}</span>
+                    </button>
+                    <button type="button" onClick={() => fetchDashboardData()} className="flex w-full items-center justify-between rounded-2xl border border-white/10 bg-slate-950/70 px-4 py-3 hover:border-amber-400/40">
+                      <span>Refresh dashboard</span>
+                      <span className="text-amber-300">↻</span>
                     </button>
                   </div>
                 </div>

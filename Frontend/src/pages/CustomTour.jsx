@@ -21,9 +21,16 @@ const CustomTour = () => {
 
   const handleChange = (e) => {
     const { name, value } = e.target;
+    const sanitizedValue =
+      name === "name"
+        ? value.replace(/[0-9]/g, "")
+        : name === "phone"
+        ? value.replace(/[^0-9]/g, "").slice(0, 10)
+        : value;
+
     setFormData({
       ...formData,
-      [name]: value,
+      [name]: sanitizedValue,
     });
 
     // Clear error when user starts typing
@@ -32,6 +39,18 @@ const CustomTour = () => {
         ...errors,
         [name]: "",
       });
+    }
+  };
+
+  const handleNameKeyDown = (e) => {
+    if (/\d/.test(e.key)) {
+      e.preventDefault();
+    }
+  };
+
+  const handlePhoneKeyDown = (e) => {
+    if (!/\d/.test(e.key) && e.key !== "Backspace" && e.key !== "Delete" && e.key !== "ArrowLeft" && e.key !== "ArrowRight" && e.key !== "Tab") {
+      e.preventDefault();
     }
   };
 
@@ -55,8 +74,8 @@ const CustomTour = () => {
     // Phone validation
     if (!formData.phone.trim()) {
       newErrors.phone = "Phone number is required";
-    } else if (!/^\+?[0-9\s\-\(\)]{10,20}$/.test(formData.phone)) {
-      newErrors.phone = "Please enter a valid phone number";
+    } else if (!/^\d{10}$/.test(formData.phone)) {
+      newErrors.phone = "Please enter a valid 10-digit phone number";
     }
 
     // Travel dates validation
@@ -205,6 +224,7 @@ const CustomTour = () => {
                   name="name"
                   value={formData.name}
                   onChange={handleChange}
+                  onKeyDown={handleNameKeyDown}
                   className={`w-full bg-gray-700/50 border ${errors.name ? "border-red-500" : "border-gray-600"} rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-yellow-500 backdrop-blur-sm`}
                 />
                 {errors.name && (
@@ -237,6 +257,8 @@ const CustomTour = () => {
                   name="phone"
                   value={formData.phone}
                   onChange={handleChange}
+                  onKeyDown={handlePhoneKeyDown}
+                  maxLength={10}
                   className={`w-full bg-gray-700/50 border ${errors.phone ? "border-red-500" : "border-gray-600"} rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-yellow-500 backdrop-blur-sm`}
                 />
                 {errors.phone && (

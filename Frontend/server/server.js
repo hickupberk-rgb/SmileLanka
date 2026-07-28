@@ -39,6 +39,7 @@ const ensureDatabaseConnection = async () => {
   }
 };
 const hashPassword = (password) => crypto.createHash("sha256").update(password).digest("hex");
+const createAdminToken = (admin) => crypto.createHash("sha256").update(`${admin.email}:${admin.password}:${admin.role}`).digest("hex");
 const comparePassword = (inputPassword, storedPassword) => {
   if (!inputPassword || !storedPassword) {
     return false;
@@ -52,6 +53,34 @@ const sanitizeAdmin = (admin) => ({
   email: admin.email,
   role: admin.role,
 });
+const getAdminByToken = async (token) => {
+  if (!token) {
+    return null;
+  }
+
+  if (isDbReady()) {
+    const adminsFromDb = await Admin.find({}, "name email password role").lean();
+    return adminsFromDb.find((admin) => createAdminToken(admin) === token) || null;
+  }
+
+  return fallbackStorage.admins.find((admin) => createAdminToken(admin) === token) || null;
+};
+const requireAdminAuth = async (req, res, next) => {
+  const authHeader = req.headers.authorization || req.headers["x-admin-token"];
+  const token = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : authHeader;
+
+  if (!token) {
+    return res.status(401).json({ error: "Admin access required" });
+  }
+
+  const admin = await getAdminByToken(token);
+  if (!admin) {
+    return res.status(403).json({ error: "Invalid admin session" });
+  }
+
+  req.admin = sanitizeAdmin(admin);
+  next();
+};
 
 // middleware
 app.use(cors({
@@ -108,13 +137,13 @@ app.post("/admin/register", async (req, res) => {
 
     const normalizedEmail = email.toLowerCase().trim();
     const dbReady = await ensureDatabaseConnection();
+    const hasExistingAdmins = (dbReady ? await Admin.countDocuments().catch(() => 0) : 0) > 0 || fallbackStorage.admins.length > 0;
+
+    if (hasExistingAdmins) {
+      return res.status(403).json({ error: "Admin registration is disabled. Please sign in with an existing admin account." });
+    }
 
     if (!dbReady) {
-      const existingAdmin = fallbackStorage.admins.find((item) => item.email === normalizedEmail);
-      if (existingAdmin) {
-        return res.status(409).json({ error: "Admin already exists" });
-      }
-
       const admin = {
         id: createId(),
         name: name.trim(),
@@ -124,12 +153,7 @@ app.post("/admin/register", async (req, res) => {
       };
 
       fallbackStorage.admins.push(admin);
-      return res.json({ success: true, admin: sanitizeAdmin(admin) });
-    }
-
-    const existingAdmin = await Admin.findOne({ email: normalizedEmail });
-    if (existingAdmin) {
-      return res.status(409).json({ error: "Admin already exists" });
+      return res.json({ success: true, token: createAdminToken(admin), admin: sanitizeAdmin(admin) });
     }
 
     const admin = await Admin.create({
@@ -141,6 +165,7 @@ app.post("/admin/register", async (req, res) => {
 
     res.json({
       success: true,
+      token: createAdminToken(admin),
       admin: sanitizeAdmin(admin),
     });
   } catch (error) {
@@ -166,7 +191,7 @@ app.post("/admin/login", async (req, res) => {
         return res.status(401).json({ error: "Invalid admin credentials" });
       }
 
-      return res.json({ success: true, admin: sanitizeAdmin(admin) });
+      return res.json({ success: true, token: createAdminToken(admin), admin: sanitizeAdmin(admin) });
     }
 
     const admin = await Admin.findOne({ email: normalizedEmail });
@@ -176,6 +201,7 @@ app.post("/admin/login", async (req, res) => {
 
     res.json({
       success: true,
+      token: createAdminToken(admin),
       admin: sanitizeAdmin(admin),
     });
   } catch (error) {
@@ -301,7 +327,7 @@ app.post("/book", async (req, res) => {
   }
 });
 
-app.patch("/admin/bookings/:id/status", async (req, res) => {
+app.patch("/admin/bookings/:id/status", requireAdminAuth, async (req, res) => {
   try {
     const { id } = req.params;
     const { status } = req.body;
@@ -344,7 +370,7 @@ app.patch("/admin/bookings/:id/status", async (req, res) => {
   }
 });
 
-app.get("/admin/bookings", async (req, res) => {
+app.get("/admin/bookings", requireAdminAuth, async (req, res) => {
   try {
     if (!isDbReady()) {
       return res.json({ bookings: fallbackStorage.bookings });
@@ -363,7 +389,7 @@ app.get("/admin/bookings", async (req, res) => {
   }
 });
 
-app.get("/admin/stats", async (req, res) => {
+app.get("/admin/stats", requireAdminAuth, async (req, res) => {
   try {
     if (!isDbReady()) {
       const bookings = fallbackStorage.bookings;
