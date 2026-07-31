@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { ShieldCheck, Eye, EyeOff } from "lucide-react";
+import emailjs from "emailjs-com";
 
 const SESSION_KEY = "smilelanka_admin_session";
 
@@ -8,8 +9,9 @@ const AdminAuthPage = () => {
   const navigate = useNavigate();
   const [mode, setMode] = useState("login");
   const [showPassword, setShowPassword] = useState(false);
-  const [form, setForm] = useState({ name: "", email: "", password: "", confirmPassword: "" });
+  const [form, setForm] = useState({ name: "", email: "", phone: "", password: "", confirmPassword: "" });
   const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
   const [adminExists, setAdminExists] = useState(true);
 
   useEffect(() => {
@@ -42,8 +44,10 @@ const AdminAuthPage = () => {
 
   const handleChange = (event) => {
     const { name, value } = event.target;
-    setForm((prev) => ({ ...prev, [name]: value }));
+    const nextValue = name === "name" ? value.replace(/[0-9]/g, "") : value;
+    setForm((prev) => ({ ...prev, [name]: nextValue }));
     setError("");
+    setMessage("");
   };
 
   const handleSubmit = async (event) => {
@@ -52,6 +56,11 @@ const AdminAuthPage = () => {
     if (mode === "register") {
       if (!form.name.trim() || !form.email.trim() || !form.password.trim()) {
         setError("Please fill every field before creating the first admin account.");
+        return;
+      }
+
+      if (!/^[A-Za-z]+(?:[ '\u002D][A-Za-z]+)*$/.test(form.name.trim())) {
+        setError("Full name can contain only letters, spaces, apostrophes, and hyphens.");
         return;
       }
 
@@ -66,12 +75,17 @@ const AdminAuthPage = () => {
       }
 
       try {
+        const session = JSON.parse(localStorage.getItem(SESSION_KEY) || "null");
         const response = await fetch("http://localhost:5000/admin/register", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            ...(session?.token ? { Authorization: `Bearer ${session.token}` } : {}),
+          },
           body: JSON.stringify({
             name: form.name.trim(),
             email: form.email.trim(),
+            phone: form.phone.trim(),
             password: form.password,
           }),
         });
@@ -79,6 +93,41 @@ const AdminAuthPage = () => {
         const data = await response.json();
         if (!response.ok) {
           setError(data.error || "Registration failed");
+          return;
+        }
+
+        if (data.pending) {
+          try {
+            await emailjs.send(
+              "service_sthazi4",
+              "template_cxf72kd",
+              {
+                to_email: "shewanthag@gmail.com",
+                super_admin_email: "shewanthag@gmail.com",
+                admin_name: form.name.trim(),
+                admin_email: form.email.trim(),
+                registered_at: new Date().toLocaleString(),
+                approval_link: data.confirmationLink,
+                name: form.name.trim(),
+                email: form.email.trim(),
+                phone: form.phone.trim() || "Not provided",
+                registration_time: new Date().toLocaleString(),
+                approve_link: data.confirmationLink,
+                applicant_name: form.name.trim(),
+                applicant_email: form.email.trim(),
+                applicant_phone: form.phone.trim() || "Not provided",
+                confirmation_link: data.confirmationLink,
+                submitted_at: new Date().toLocaleString(),
+              },
+              "-jm6IVVik5T6iJptB",
+            );
+          } catch (emailError) {
+            setError("The registration request was saved, but the approval email could not be sent. Check the EmailJS service and template settings.");
+            return;
+          }
+
+          setMessage("Approval message sent to the super admin. You can sign in after the registration is confirmed.");
+          setForm({ name: "", email: "", phone: "", password: "", confirmPassword: "" });
           return;
         }
 
@@ -138,7 +187,7 @@ const AdminAuthPage = () => {
 
         <div className="flex-1 p-8 lg:p-10">
           <div className="mb-6">
-            <p className="text-sm uppercase tracking-[0.3em] text-amber-300">{mode === "login" ? "Login" : "Create first admin"}</p>
+            <p className="text-sm uppercase tracking-[0.3em] text-amber-300">{mode === "login" ? "Login" : "Register admin"}</p>
             <h2 className="text-2xl font-semibold text-white">Admin portal</h2>
           </div>
 
@@ -146,6 +195,20 @@ const AdminAuthPage = () => {
             <div className="mb-4 rounded-2xl border border-amber-400/30 bg-amber-400/10 px-3 py-2 text-sm text-amber-100">
               No admin account exists yet. Create the first admin account to enter the dashboard.
             </div>
+          )}
+
+          {adminExists && (
+            <button
+              type="button"
+              onClick={() => {
+                setMode((currentMode) => (currentMode === "login" ? "register" : "login"));
+                setError("");
+                setMessage("");
+              }}
+              className="mb-5 text-sm text-amber-300 transition hover:text-amber-200"
+            >
+              {mode === "login" ? "New admin?" : "Back to admin login"}
+            </button>
           )}
 
           <form className="space-y-4" onSubmit={handleSubmit}>
@@ -157,6 +220,12 @@ const AdminAuthPage = () => {
                   name="name"
                   value={form.name}
                   onChange={handleChange}
+                  onKeyDown={(event) => {
+                    if (/^[0-9]$/.test(event.key)) {
+                      event.preventDefault();
+                    }
+                  }}
+                  inputMode="text"
                   className="w-full rounded-2xl border border-white/10 bg-slate-900/70 px-4 py-3 text-white outline-none ring-0 focus:border-amber-400"
                   placeholder="Alex Fernando"
                 />
@@ -175,6 +244,8 @@ const AdminAuthPage = () => {
               />
             </div>
 
+           
+
             <div>
               <label className="mb-2 block text-sm text-slate-300">Password</label>
               <div className="relative">
@@ -183,6 +254,7 @@ const AdminAuthPage = () => {
                   name="password"
                   value={form.password}
                   onChange={handleChange}
+                  minLength={6}
                   className="w-full rounded-2xl border border-white/10 bg-slate-900/70 px-4 py-3 pr-12 text-white outline-none focus:border-amber-400"
                   placeholder="••••••••"
                 />
@@ -200,21 +272,23 @@ const AdminAuthPage = () => {
                   name="confirmPassword"
                   value={form.confirmPassword}
                   onChange={handleChange}
+                  minLength={6}
                   className="w-full rounded-2xl border border-white/10 bg-slate-900/70 px-4 py-3 text-white outline-none focus:border-amber-400"
                   placeholder="Repeat password"
                 />
               </div>
             )}
 
+            {message && <p className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-200">{message}</p>}
             {error && <p className="rounded-2xl border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-200">{error}</p>}
 
             <button type="submit" className="w-full rounded-2xl bg-amber-400 px-4 py-3 font-semibold text-black transition hover:bg-amber-300">
-              {mode === "login" ? "Login to dashboard" : "Create first admin"}
+              {mode === "login" ? "Login to dashboard" : "Request admin registration"}
             </button>
           </form>
 
           <p className="mt-4 text-sm text-slate-400">
-            {mode === "login" ? "Only existing admins can sign in to this dashboard." : "This creates the initial admin account for the dashboard."}
+            {mode === "login" ? "Only registered admins can sign in to this dashboard." : "The super admin must confirm this registration by email before access is enabled."}
           </p>
 
           <Link to="/" className="mt-5 inline-flex text-sm text-slate-400 transition hover:text-amber-300">

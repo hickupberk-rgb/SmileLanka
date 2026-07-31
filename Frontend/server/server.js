@@ -8,12 +8,14 @@ import User from "./Models/userModel.js";
 import CustomTour from "./Models/customTourModel.js";
 import Booking from "./Models/bookingModel.js";
 import Admin from "./Models/adminModel.js";
+import AdminRegistrationRequest from "./Models/adminRegistrationRequestModel.js";
 dotenv.config();
 
 const app = express();
 const PORT = 5000;
 const fallbackStorage = {
   admins: [],
+  adminRegistrationRequests: [],
   users: [],
   bookings: [],
 };
@@ -39,6 +41,7 @@ const ensureDatabaseConnection = async () => {
   }
 };
 const hashPassword = (password) => crypto.createHash("sha256").update(password).digest("hex");
+const hashRegistrationToken = (token) => crypto.createHash("sha256").update(token).digest("hex");
 const createAdminToken = (admin) => crypto.createHash("sha256").update(`${admin.email}:${admin.password}:${admin.role}`).digest("hex");
 const comparePassword = (inputPassword, storedPassword) => {
   if (!inputPassword || !storedPassword) {
@@ -81,7 +84,6 @@ const requireAdminAuth = async (req, res, next) => {
   req.admin = sanitizeAdmin(admin);
   next();
 };
-
 // middleware
 app.use(cors({
   origin: ["http://localhost:5173", "http://localhost:5174", "http://127.0.0.1:5173", "http://127.0.0.1:5174", "http://localhost:3000"],
@@ -127,9 +129,23 @@ app.get("/check-user", async (req, res) => {
 
 
 /* ---------------- ADMIN AUTH ---------------- */
+app.get("/admin/exists", async (req, res) => {
+  try {
+    const dbReady = await ensureDatabaseConnection();
+    const exists = dbReady
+      ? (await Admin.countDocuments().catch(() => 0)) > 0
+      : fallbackStorage.admins.length > 0;
+
+    res.json({ exists });
+  } catch (error) {
+    console.error("ADMIN EXISTS ERROR:", error);
+    res.status(500).json({ error: "Unable to check admin setup" });
+  }
+});
+
 app.post("/admin/register", async (req, res) => {
   try {
-    const { name, email, password } = req.body;
+    const { name, email, phone, password } = req.body;
 
     if (!name || !email || !password) {
       return res.status(400).json({ error: "Name, email and password are required" });
@@ -137,40 +153,101 @@ app.post("/admin/register", async (req, res) => {
 
     const normalizedEmail = email.toLowerCase().trim();
     const dbReady = await ensureDatabaseConnection();
-    const hasExistingAdmins = (dbReady ? await Admin.countDocuments().catch(() => 0) : 0) > 0 || fallbackStorage.admins.length > 0;
+    const existingAdmin = dbReady
+      ? await Admin.findOne({ email: normalizedEmail }).lean()
+      : fallbackStorage.admins.find((admin) => admin.email === normalizedEmail);
 
-    if (hasExistingAdmins) {
-      return res.status(403).json({ error: "Admin registration is disabled. Please sign in with an existing admin account." });
+    if (existingAdmin) {
+      return res.status(409).json({ error: "An admin account already exists with this email." });
     }
 
+    const token = crypto.randomBytes(32).toString("hex");
+    const tokenHash = hashRegistrationToken(token);
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+
     if (!dbReady) {
-      const admin = {
+      fallbackStorage.adminRegistrationRequests.push({
         id: createId(),
         name: name.trim(),
         email: normalizedEmail,
+        phone: phone?.trim() || "Not provided",
         password: hashPassword(password),
-        role: "admin",
-      };
-
-      fallbackStorage.admins.push(admin);
-      return res.json({ success: true, token: createAdminToken(admin), admin: sanitizeAdmin(admin) });
+        tokenHash,
+        expiresAt,
+      });
+    } else {
+      await AdminRegistrationRequest.deleteMany({ email: normalizedEmail });
+      await AdminRegistrationRequest.create({
+        name: name.trim(),
+        email: normalizedEmail,
+        phone: phone?.trim() || "Not provided",
+        password: hashPassword(password),
+        tokenHash,
+        expiresAt,
+      });
     }
 
-    const admin = await Admin.create({
-      name: name.trim(),
-      email: normalizedEmail,
-      password: hashPassword(password),
-      role: "admin",
-    });
+    const serverUrl = process.env.PUBLIC_SERVER_URL || `http://localhost:${PORT}`;
+    const confirmationLink = `${serverUrl}/admin/register/confirm?token=${token}`;
 
     res.json({
       success: true,
-      token: createAdminToken(admin),
-      admin: sanitizeAdmin(admin),
+      pending: true,
+      confirmationLink,
+      message: "Registration request created. Sending the approval message now.",
     });
   } catch (error) {
     console.error("ADMIN REGISTER ERROR:", error);
     res.status(500).json({ error: error.message });
+  }
+});
+
+app.get("/admin/register/confirm", async (req, res) => {
+  try {
+    const { token } = req.query;
+    if (!token || typeof token !== "string") {
+      return res.status(400).send("Invalid registration confirmation link.");
+    }
+
+    const tokenHash = hashRegistrationToken(token);
+    const dbReady = await ensureDatabaseConnection();
+    const request = dbReady
+      ? await AdminRegistrationRequest.findOne({ tokenHash })
+      : fallbackStorage.adminRegistrationRequests.find((item) => item.tokenHash === tokenHash);
+
+    if (!request || new Date(request.expiresAt) < new Date()) {
+      return res.status(400).send("This registration request is invalid or has expired.");
+    }
+
+    const existingAdmin = dbReady
+      ? await Admin.findOne({ email: request.email })
+      : fallbackStorage.admins.find((admin) => admin.email === request.email);
+
+    if (existingAdmin) {
+      return res.status(409).send("An admin account already exists with this email.");
+    }
+
+    const admin = dbReady
+      ? await Admin.create({ name: request.name, email: request.email, password: request.password, role: "admin" })
+      : {
+          id: createId(),
+          name: request.name,
+          email: request.email,
+          password: request.password,
+          role: "admin",
+        };
+
+    if (!dbReady) {
+      fallbackStorage.admins.push(admin);
+      fallbackStorage.adminRegistrationRequests = fallbackStorage.adminRegistrationRequests.filter((item) => item.tokenHash !== tokenHash);
+    } else {
+      await AdminRegistrationRequest.deleteOne({ _id: request._id });
+    }
+
+    res.send("Admin registration confirmed successfully. The new admin can now sign in.");
+  } catch (error) {
+    console.error("ADMIN REGISTRATION CONFIRMATION ERROR:", error);
+    res.status(500).send("Unable to confirm admin registration.");
   }
 });
 
