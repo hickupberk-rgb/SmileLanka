@@ -10,10 +10,12 @@ const AdminDashboard = () => {
   const navigate = useNavigate();
   const [user, setUser] = useState(null);
   const [bookings, setBookings] = useState([]);
+  const [customTours, setCustomTours] = useState([]);
   const [stats, setStats] = useState({ total: 0, confirmed: 0, pending: 0, revenue: 0 });
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [updatingBookingId, setUpdatingBookingId] = useState(null);
+  const [updatingCustomTourId, setUpdatingCustomTourId] = useState(null);
   const [activeFilter, setActiveFilter] = useState("All");
 
   useEffect(() => {
@@ -43,10 +45,8 @@ const AdminDashboard = () => {
       const session = JSON.parse(localStorage.getItem(SESSION_KEY) || "null");
       const authHeaders = session?.token ? { Authorization: `Bearer ${session.token}` } : {};
 
-      const [bookingsResponse, statsResponse] = await Promise.all([
-        fetch("http://localhost:5000/admin/bookings", { headers: authHeaders }),
-        fetch("http://localhost:5000/admin/stats", { headers: authHeaders }),
-      ]);
+      const bookingsResponse = await fetch("http://localhost:5000/admin/bookings", { headers: authHeaders });
+      const statsResponse = await fetch("http://localhost:5000/admin/stats", { headers: authHeaders });
 
       if (!bookingsResponse.ok || !statsResponse.ok) {
         throw new Error("Admin session expired");
@@ -55,10 +55,24 @@ const AdminDashboard = () => {
       const bookingsData = await bookingsResponse.json();
       const statsData = await statsResponse.json();
 
+      let customToursData = { customTours: [] };
+      try {
+        const customToursResponse = await fetch("http://localhost:5000/admin/custom-tours", { headers: authHeaders });
+        if (customToursResponse.ok) {
+          customToursData = await customToursResponse.json();
+        }
+      } catch (customTourError) {
+        console.warn("Custom tour endpoint unavailable, continuing with booking data only.", customTourError);
+      }
+
       setBookings(bookingsData.bookings || []);
+      setCustomTours(customToursData.customTours || []);
       setStats(statsData.stats || { total: 0, confirmed: 0, pending: 0, revenue: 0 });
     } catch (error) {
       console.error("Failed to load dashboard data", error);
+      setBookings([]);
+      setCustomTours([]);
+      setStats({ total: 0, confirmed: 0, pending: 0, revenue: 0 });
     } finally {
       setLoading(false);
     }
@@ -80,6 +94,7 @@ const AdminDashboard = () => {
   const filteredBookings = activeFilter === "All"
     ? bookings
     : bookings.filter((booking) => booking.status === activeFilter);
+  const customTourCount = customTours.length;
 
   const logout = () => {
     localStorage.removeItem(SESSION_KEY);
@@ -110,6 +125,33 @@ const AdminDashboard = () => {
       console.error("Status update failed", error);
     } finally {
       setUpdatingBookingId(null);
+    }
+  };
+
+  const handleCustomTourStatusChange = async (customTourId, nextStatus) => {
+    setUpdatingCustomTourId(customTourId);
+
+    try {
+      const session = JSON.parse(localStorage.getItem(SESSION_KEY) || "null");
+      const response = await fetch(`http://localhost:5000/admin/custom-tours/${customTourId}/status`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          ...(session?.token ? { Authorization: `Bearer ${session.token}` } : {}),
+        },
+        body: JSON.stringify({ status: nextStatus }),
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to update custom tour status");
+      }
+
+      await fetchDashboardData();
+    } catch (error) {
+      console.error("Custom tour status update failed", error);
+    } finally {
+      setUpdatingCustomTourId(null);
     }
   };
 
@@ -270,6 +312,62 @@ const AdminDashboard = () => {
                       <span>Refresh dashboard</span>
                       <span className="text-amber-300">↻</span>
                     </button>
+                  </div>
+                </div>
+
+                <div className="rounded-[28px] border border-white/10 bg-white/5 p-5">
+                  <div className="flex items-center justify-between">
+                    <h3 className="font-semibold text-white">Custom tour applications</h3>
+                    <span className="rounded-full bg-amber-400/15 px-2.5 py-1 text-xs font-semibold text-amber-300">{customTourCount}</span>
+                  </div>
+
+                  <div className="mt-4 space-y-3">
+                    {customTours.length === 0 ? (
+                      <p className="rounded-2xl border border-dashed border-white/10 bg-slate-950/60 p-4 text-sm text-slate-400">No custom tour applications yet.</p>
+                    ) : (
+                      customTours.map((request) => (
+                        <div key={request._id} className="rounded-2xl border border-white/10 bg-slate-950/70 p-4 text-sm text-slate-300">
+                          <div className="flex items-start justify-between gap-3">
+                            <div>
+                              <p className="font-semibold text-white">{request.name}</p>
+                              <p className="mt-1 text-slate-400">{request.email}</p>
+                              <p className="text-slate-400">{request.phone}</p>
+                            </div>
+                            <div className="flex flex-col items-end gap-2">
+                              <span className={`inline-flex rounded-full px-2.5 py-1 text-[10px] font-medium uppercase tracking-wide ${request.status === "Confirmed" || request.status === "Completed" ? "bg-emerald-500/15 text-emerald-300" : request.status === "Cancelled" ? "bg-rose-500/15 text-rose-300" : "bg-amber-500/15 text-amber-300"}`}>
+                                {request.status || "Pending"}
+                              </span>
+                              <select
+                                value={request.status || "Pending"}
+                                onChange={(event) => handleCustomTourStatusChange(request._id, event.target.value)}
+                                disabled={updatingCustomTourId === request._id}
+                                className="rounded-full border border-amber-400/30 bg-slate-900/90 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-white outline-none transition hover:border-amber-400/50"
+                              >
+                                <option value="Pending">Pending</option>
+                                <option value="Confirmed">Confirmed</option>
+                                <option value="Completed">Completed</option>
+                                <option value="Cancelled">Cancelled</option>
+                              </select>
+                            </div>
+                          </div>
+
+                          <div className="mt-3 space-y-1 text-xs text-slate-300">
+                            <p><span className="text-slate-500">Dates:</span> {request.travelDates}</p>
+                            <p><span className="text-slate-500">Duration:</span> {request.duration}</p>
+                            <p><span className="text-slate-500">Budget:</span> {request.budget}</p>
+                            <p><span className="text-slate-500">Group size:</span> {request.groupSize}</p>
+                          </div>
+                          <p className="mt-3 rounded-xl bg-white/5 p-2 text-xs text-slate-300">
+                            <span className="text-slate-500">Interests:</span> {request.interests}
+                          </p>
+                          {request.specialRequests && (
+                            <p className="mt-2 rounded-xl bg-white/5 p-2 text-xs text-slate-300">
+                              <span className="text-slate-500">Special requests:</span> {request.specialRequests}
+                            </p>
+                          )}
+                        </div>
+                      ))
+                    )}
                   </div>
                 </div>
               </div>

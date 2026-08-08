@@ -10,6 +10,11 @@ const customTourSchema = new mongoose.Schema({
   budget: String,
   groupSize: String,
   specialRequests: String,
+  status: {
+    type: String,
+    enum: ["Pending", "Confirmed", "Completed", "Cancelled"],
+    default: "Pending",
+  },
   createdAt: {
     type: Date,
     default: Date.now,

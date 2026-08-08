@@ -18,6 +18,7 @@ const fallbackStorage = {
   adminRegistrationRequests: [],
   users: [],
   bookings: [],
+  customTours: [],
 };
 
 const isDbReady = () => mongoose.connection.readyState === 1;
@@ -504,6 +505,69 @@ app.get("/admin/stats", requireAdminAuth, async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
+
+app.patch("/admin/custom-tours/:id/status", requireAdminAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status } = req.body;
+    const allowedStatuses = ["Pending", "Confirmed", "Completed", "Cancelled"];
+
+    if (!allowedStatuses.includes(status)) {
+      return res.status(400).json({ error: "Invalid custom tour status" });
+    }
+
+    if (!isDbReady()) {
+      const customTourIndex = fallbackStorage.customTours.findIndex((item) => item._id === id || item.id === id);
+      if (customTourIndex === -1) {
+        return res.status(404).json({ error: "Custom tour request not found" });
+      }
+
+      fallbackStorage.customTours[customTourIndex] = {
+        ...fallbackStorage.customTours[customTourIndex],
+        status,
+      };
+
+      return res.json({ success: true, customTour: fallbackStorage.customTours[customTourIndex] });
+    }
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ error: "Invalid custom tour ID" });
+    }
+
+    const customTour = await CustomTour.findByIdAndUpdate(id, { status }, { new: true }).lean();
+    if (!customTour) {
+      return res.status(404).json({ error: "Custom tour request not found" });
+    }
+
+    res.json({ success: true, customTour });
+  } catch (error) {
+    console.error("UPDATE CUSTOM TOUR STATUS ERROR:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get("/admin/custom-tours", requireAdminAuth, async (req, res) => {
+  try {
+    if (!isDbReady()) {
+      return res.json({ customTours: (fallbackStorage.customTours || []).map((request) => ({
+        ...request,
+        status: request.status || "Pending",
+      })) });
+    }
+
+    const customTours = await CustomTour.find().sort({ createdAt: -1 }).lean();
+    res.json({
+      customTours: customTours.map((request) => ({
+        ...request,
+        status: request.status || "Pending",
+      })),
+    });
+  } catch (error) {
+    console.error("ADMIN CUSTOM TOURS ERROR:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 /* ---------------- CUSTOM TOUR REQUEST ---------------- */
 app.post("/custom-tour", async (req, res) => {
   try {
@@ -519,7 +583,30 @@ app.post("/custom-tour", async (req, res) => {
       specialRequests,
     } = req.body;
 
-    // save to DB
+    if (!isDbReady()) {
+      const request = {
+        _id: createId(),
+        name,
+        email,
+        phone,
+        travelDates,
+        duration,
+        interests,
+        budget,
+        groupSize,
+        specialRequests,
+        status: "Pending",
+        createdAt: new Date(),
+      };
+
+      fallbackStorage.customTours.push(request);
+      return res.json({
+        success: true,
+        requestId: request._id,
+        message: "Custom tour request saved",
+      });
+    }
+
     const request = await CustomTour.create({
       name,
       email,
@@ -530,6 +617,7 @@ app.post("/custom-tour", async (req, res) => {
       budget,
       groupSize,
       specialRequests,
+      status: "Pending",
     });
 
     res.json({
