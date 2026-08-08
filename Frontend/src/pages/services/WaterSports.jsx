@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import Navbar from "../../components/Navbar";
-import { useNavigate, useLocation } from "react-router-dom";
+import {Link, useNavigate, useLocation } from "react-router-dom";
 
 const WaterSports = () => {
   const navigate = useNavigate();
