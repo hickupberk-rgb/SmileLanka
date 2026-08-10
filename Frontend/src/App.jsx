@@ -39,6 +39,7 @@ import BookingForm from "./pages/BookingForm .jsx";
 import CustomTour from "./pages/CustomTour.jsx";
 import AdminAuthPage from "./pages/admin/AdminAuthPage.jsx";
 import AdminDashboard from "./pages/admin/AdminDashboard.jsx";
+import AdminCustomToursPage from "./pages/admin/AdminCustomToursPage.jsx";
 import ProtectedAdminRoute from "./components/ProtectedAdminRoute.jsx";
 
 const App = () => {
@@ -92,6 +93,7 @@ const App = () => {
                 <Route path="/admin/auth" element={<AdminAuthPage />} />
                 <Route element={<ProtectedAdminRoute />}>
                   <Route path="/admin" element={<AdminDashboard />} />
+                  <Route path="/admin/custom-tours" element={<AdminCustomToursPage />} />
                 </Route>
 
                 {/* Individual destination routes */}

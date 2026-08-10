@@ -95,6 +95,9 @@ const AdminDashboard = () => {
     ? bookings
     : bookings.filter((booking) => booking.status === activeFilter);
   const customTourCount = customTours.length;
+  const pendingCustomTours = customTours.filter((request) => (request.status || "Pending") === "Pending").length;
+  const cancelledCustomTours = customTours.filter((request) => (request.status || "Pending") === "Cancelled").length;
+  const recentCustomTours = customTours.slice(0, 3);
 
   const logout = () => {
     localStorage.removeItem(SESSION_KEY);
@@ -317,58 +320,42 @@ const AdminDashboard = () => {
 
                 <div className="rounded-[28px] border border-white/10 bg-white/5 p-5">
                   <div className="flex items-center justify-between">
-                    <h3 className="font-semibold text-white">Custom tour applications</h3>
+                    <h3 className="font-semibold text-white">Custom tour requests</h3>
                     <span className="rounded-full bg-amber-400/15 px-2.5 py-1 text-xs font-semibold text-amber-300">{customTourCount}</span>
                   </div>
 
-                  <div className="mt-4 space-y-3">
-                    {customTours.length === 0 ? (
-                      <p className="rounded-2xl border border-dashed border-white/10 bg-slate-950/60 p-4 text-sm text-slate-400">No custom tour applications yet.</p>
-                    ) : (
-                      customTours.map((request) => (
-                        <div key={request._id} className="rounded-2xl border border-white/10 bg-slate-950/70 p-4 text-sm text-slate-300">
-                          <div className="flex items-start justify-between gap-3">
-                            <div>
-                              <p className="font-semibold text-white">{request.name}</p>
-                              <p className="mt-1 text-slate-400">{request.email}</p>
-                              <p className="text-slate-400">{request.phone}</p>
-                            </div>
-                            <div className="flex flex-col items-end gap-2">
-                              <span className={`inline-flex rounded-full px-2.5 py-1 text-[10px] font-medium uppercase tracking-wide ${request.status === "Confirmed" || request.status === "Completed" ? "bg-emerald-500/15 text-emerald-300" : request.status === "Cancelled" ? "bg-rose-500/15 text-rose-300" : "bg-amber-500/15 text-amber-300"}`}>
-                                {request.status || "Pending"}
-                              </span>
-                              <select
-                                value={request.status || "Pending"}
-                                onChange={(event) => handleCustomTourStatusChange(request._id, event.target.value)}
-                                disabled={updatingCustomTourId === request._id}
-                                className="rounded-full border border-amber-400/30 bg-slate-900/90 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-white outline-none transition hover:border-amber-400/50"
-                              >
-                                <option value="Pending">Pending</option>
-                                <option value="Confirmed">Confirmed</option>
-                                <option value="Completed">Completed</option>
-                                <option value="Cancelled">Cancelled</option>
-                              </select>
-                            </div>
-                          </div>
+                  <div className="mt-4 grid grid-cols-2 gap-2 text-sm">
+                    <div className="rounded-2xl border border-white/10 bg-slate-950/70 p-3">
+                      <p className="text-slate-400">Pending</p>
+                      <p className="mt-1 text-xl font-semibold text-amber-300">{pendingCustomTours}</p>
+                    </div>
+                    <div className="rounded-2xl border border-white/10 bg-slate-950/70 p-3">
+                      <p className="text-slate-400">Cancelled</p>
+                      <p className="mt-1 text-xl font-semibold text-rose-300">{cancelledCustomTours}</p>
+                    </div>
+                  </div>
 
-                          <div className="mt-3 space-y-1 text-xs text-slate-300">
-                            <p><span className="text-slate-500">Dates:</span> {request.travelDates}</p>
-                            <p><span className="text-slate-500">Duration:</span> {request.duration}</p>
-                            <p><span className="text-slate-500">Budget:</span> {request.budget}</p>
-                            <p><span className="text-slate-500">Group size:</span> {request.groupSize}</p>
+                  <div className="mt-4 space-y-2">
+                    {recentCustomTours.length === 0 ? (
+                      <p className="rounded-2xl border border-dashed border-white/10 bg-slate-950/60 p-3 text-xs text-slate-400">No custom tour requests yet.</p>
+                    ) : (
+                      recentCustomTours.map((request) => (
+                        <div key={request._id} className="flex items-center justify-between gap-3 rounded-2xl border border-white/10 bg-slate-950/70 px-3 py-2">
+                          <div>
+                            <p className="text-sm font-medium text-white">{request.name}</p>
+                            <p className="text-[11px] text-slate-400">{request.travelDates || "No dates"}</p>
                           </div>
-                          <p className="mt-3 rounded-xl bg-white/5 p-2 text-xs text-slate-300">
-                            <span className="text-slate-500">Interests:</span> {request.interests}
-                          </p>
-                          {request.specialRequests && (
-                            <p className="mt-2 rounded-xl bg-white/5 p-2 text-xs text-slate-300">
-                              <span className="text-slate-500">Special requests:</span> {request.specialRequests}
-                            </p>
-                          )}
+                          <span className={`inline-flex rounded-full px-2 py-1 text-[10px] font-medium uppercase tracking-wide ${request.status === "Cancelled" ? "bg-rose-500/15 text-rose-300" : request.status === "Confirmed" || request.status === "Completed" ? "bg-emerald-500/15 text-emerald-300" : "bg-amber-500/15 text-amber-300"}`}>
+                            {request.status || "Pending"}
+                          </span>
                         </div>
                       ))
                     )}
                   </div>
+
+                  <Link to="/admin/custom-tours" className="mt-4 inline-flex w-full items-center justify-center rounded-2xl border border-amber-400/30 bg-amber-400/10 px-4 py-3 text-sm font-semibold text-amber-300 transition hover:border-amber-400/50 hover:bg-amber-400/15">
+                    Manage custom tour requests
+                  </Link>
                 </div>
               </div>
             </section>
