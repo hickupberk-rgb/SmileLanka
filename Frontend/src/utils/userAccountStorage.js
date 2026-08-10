@@ -4,10 +4,14 @@ const STORAGE_KEYS = {
   wishlist: 'smilelanka_user_wishlist',
 };
 
-export const createDefaultUserProfile = (user = {}) => ({
-  id: user.id || user._id || 'guest-user',
-  _id: user._id || user.id || null,
-  name: user.name || 'Traveler',
+export const createDefaultUserProfile = (user = {}) => {
+  const normalizedId = user.id || user._id || 'guest-user';
+  const normalizedObjectId = user._id || user.id || (normalizedId !== 'guest-user' ? normalizedId : null);
+
+  return {
+    id: normalizedId,
+    _id: normalizedObjectId,
+    name: user.name || 'Traveler',
   email: user.email || '',
   phone: user.phone || '',
   profileImage: user.profileImage || 'https://ui-avatars.com/api/?name=' + encodeURIComponent(user.name || 'Traveler') + '&background=FBBF24&color=111827',

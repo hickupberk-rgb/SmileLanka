@@ -262,6 +262,8 @@ const UserAccountPage = () => {
     }
   };
 
+  const getCurrentUserId = () => profile._id || profile.id;
+
   const handleLogin = async (event) => {
     event.preventDefault();
 
@@ -323,7 +325,7 @@ const UserAccountPage = () => {
       bio: form.bio || profile.bio,
     };
 
-    const userId = profile.id || profile._id;
+    const userId = getCurrentUserId();
     if (!userId || userId === "guest-user") {
       setMessage({ type: "error", text: "Unable to save profile: user not identified." });
       return;
@@ -381,7 +383,7 @@ const UserAccountPage = () => {
       return;
     }
 
-    const userId = profile.id || profile._id;
+    const userId = getCurrentUserId();
     if (!userId || userId === "guest-user") {
       setMessage({ type: "error", text: "Unable to update password: user not identified." });
       return;
@@ -416,7 +418,7 @@ const UserAccountPage = () => {
     const reader = new FileReader();
     reader.onload = async () => {
       const imageValue = String(reader.result);
-      const userId = profile.id || profile._id;
+      const userId = getCurrentUserId();
       const nextProfile = { ...profile, profileImage: imageValue };
 
       setProfile(nextProfile);
@@ -484,15 +486,16 @@ const UserAccountPage = () => {
       return;
     }
 
-    const userId = profile.id || profile._id;
+    const userId = getCurrentUserId();
     if (!userId || userId === "guest-user") {
       setMessage({ type: "error", text: "Unable to save review: user not identified." });
       return;
     }
 
+    const reviewAuthor = (newReview.author || profile.name || "Traveler").trim();
     const nextReview = {
       id: `review-${Date.now()}`,
-      author: profile.name,
+      author: reviewAuthor,
       rating: Number(newReview.rating) || 5,
       note: newReview.note.trim(),
       createdAt: new Date().toISOString(),

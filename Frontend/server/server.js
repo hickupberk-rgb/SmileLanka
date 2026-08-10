@@ -484,10 +484,10 @@ app.patch("/user/:id/profile", async (req, res) => {
   }
 });
 
-app.patch("/user/:id/reviews", async (req, res) => {
+const handleUserReviewUpdate = async (req, res) => {
   try {
     const { id } = req.params;
-    const { review } = req.body;
+    const review = req.body.review || req.body;
 
     if (!review || typeof review !== "object") {
       return res.status(400).json({ error: "Review data is required" });
@@ -538,7 +538,10 @@ app.patch("/user/:id/reviews", async (req, res) => {
     console.error("UPDATE USER REVIEWS ERROR:", error);
     res.status(500).json({ error: error.message });
   }
-});
+};
+
+app.patch("/user/:id/reviews", handleUserReviewUpdate);
+app.post("/user/:id/reviews", handleUserReviewUpdate);
 
 app.patch("/user/:id/password", async (req, res) => {
   try {
