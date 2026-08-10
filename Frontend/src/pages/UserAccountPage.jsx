@@ -51,33 +51,42 @@ const UserAccountPage = () => {
       profileImage: "https://ui-avatars.com/api/?name=Traveler&background=FBBF24&color=111827",
     });
   });
-  const [bookings, setBookings] = useState(() => getStoredBookings().length ? getStoredBookings() : sampleBookings);
+  const [bookings, setBookings] = useState(() => {
+    const storedUser = getStoredUser();
+    const storedBookings = getStoredBookings();
+    if (storedUser && storedUser.email) {
+      return storedBookings;
+    }
+    return storedBookings.length ? storedBookings : sampleBookings;
+  });
   const [wishlist, setWishlist] = useState(() => getStoredWishlist().length ? getStoredWishlist() : sampleWishlist);
   const [recentlyViewed, setRecentlyViewed] = useState(sampleRecent);
   const [reviews, setReviews] = useState(sampleReviews);
   const [authMode, setAuthMode] = useState("login");
   const [isLoggedIn, setIsLoggedIn] = useState(() => {
     const stored = getStoredUser();
-    return Boolean(stored && stored.email && stored.password);
+    return Boolean(stored && stored.email);
   });
   const [message, setMessage] = useState({ type: "", text: "" });
   const [showLoginPassword, setShowLoginPassword] = useState(false);
   const [showRegisterPassword, setShowRegisterPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [form, setForm] = useState({
-    name: "",
-    email: "",
-    phone: "",
-    password: "",
-    confirmPassword: "",
-    country: "",
-    bio: "",
+  const [form, setForm] = useState(() => {
+    const stored = getStoredUser();
+    return {
+      name: stored?.name || "",
+      email: stored?.email || "",
+      phone: stored?.phone || "",
+      password: stored?.password || "",
+      confirmPassword: stored?.password || "",
+      country: stored?.country || "",
+      bio: stored?.bio || "",
+    };
   });
   const [newReview, setNewReview] = useState({ author: profile.name, rating: 5, note: "" });
 
   useEffect(() => {
-    if (!isLoggedIn || !profile.email || !profile.password) {
-      localStorage.removeItem("smilelanka_user_profile");
+    if (!isLoggedIn || !profile.email) {
       return;
     }
 
@@ -92,6 +101,12 @@ const UserAccountPage = () => {
     saveStoredWishlist(wishlist);
   }, [wishlist]);
 
+  useEffect(() => {
+    if (isLoggedIn && profile.email) {
+      fetchBookingsByEmail(profile.email);
+    }
+  }, [isLoggedIn, profile.email]);
+
   const upcomingTrips = useMemo(
     () => bookings.filter((booking) => booking.status === "Upcoming" || booking.status === "Confirmed"),
     [bookings]
@@ -99,13 +114,41 @@ const UserAccountPage = () => {
 
   const handleAuthInput = (event) => {
     const { name, value } = event.target;
-    setForm((current) => ({ ...current, [name]: value }));
+    let normalizedValue = value;
+
+    if (name === "name" || name === "country") {
+      normalizedValue = value.replace(/[0-9]/g, "");
+    }
+
+    if (name === "phone") {
+      normalizedValue = value.replace(/\D/g, "");
+    }
+
+    setForm((current) => ({ ...current, [name]: normalizedValue }));
+  };
+
+  const handleNameKeyDown = (event) => {
+    if (event.key.length === 1 && /[0-9]/.test(event.key)) {
+      event.preventDefault();
+    }
+  };
+
+  const handlePhoneKeyDown = (event) => {
+    const allowedKeys = ["Backspace", "Delete", "ArrowLeft", "ArrowRight", "Tab", "Home", "End"];
+    if (allowedKeys.includes(event.key) || event.ctrlKey || event.metaKey) {
+      return;
+    }
+    if (event.key.length === 1 && !/[0-9]/.test(event.key)) {
+      event.preventDefault();
+    }
   };
 
   const handleRegister = async (event) => {
     event.preventDefault();
     const trimmedName = form.name.trim();
     const trimmedEmail = form.email.trim().toLowerCase();
+    const trimmedPhone = form.phone.trim();
+    const trimmedCountry = form.country.trim();
 
     if (!trimmedName) {
       setMessage({ type: "error", text: "Full name is required." });
@@ -119,6 +162,16 @@ const UserAccountPage = () => {
 
     if (!trimmedEmail || !emailPattern.test(trimmedEmail)) {
       setMessage({ type: "error", text: "Please enter a valid email address." });
+      return;
+    }
+
+    if (!trimmedPhone || trimmedPhone.length !== 10) {
+      setMessage({ type: "error", text: "Phone number must be exactly 10 digits long." });
+      return;
+    }
+
+    if (!trimmedCountry) {
+      setMessage({ type: "error", text: "Country is required." });
       return;
     }
 
@@ -139,7 +192,8 @@ const UserAccountPage = () => {
         body: JSON.stringify({
           name: trimmedName,
           email: trimmedEmail,
-          phone: form.phone,
+          phone: trimmedPhone,
+          country: trimmedCountry,
           password: form.password,
         }),
       });
@@ -155,7 +209,8 @@ const UserAccountPage = () => {
         id: data.userId || data.user?.id || data.user?._id,
         name: trimmedName,
         email: trimmedEmail,
-        phone: form.phone,
+        phone: trimmedPhone,
+        country: trimmedCountry,
         password: form.password,
       });
 
@@ -294,19 +349,22 @@ const UserAccountPage = () => {
       return;
     }
 
-    try {
-      const userId = profile.id || profile._id;
-      if (userId) {
-        const response = await fetch(`http://localhost:5000/user/${userId}/password`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ password: form.password }),
-        });
+    const userId = profile.id || profile._id;
+    if (!userId) {
+      setMessage({ type: "error", text: "Unable to update password: user not identified." });
+      return;
+    }
 
-        const data = await response.json();
-        if (!response.ok) {
-          throw new Error(data.error || "Password update failed");
-        }
+    try {
+      const response = await fetch(`http://localhost:5000/user/${userId}/password`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password: form.password }),
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || "Password update failed.");
       }
 
       const updatedProfile = { ...profile, password: form.password };
@@ -360,9 +418,14 @@ const UserAccountPage = () => {
     setMessage({ type: "success", text: "Confirmation downloaded." });
   };
 
-  const handleAddReview = () => {
+  const handleAddReview = async () => {
     if (!newReview.note.trim()) {
       setMessage({ type: "error", text: "Please write a quick review before submitting." });
+      return;
+    }
+
+    if (!profile.id) {
+      setMessage({ type: "error", text: "Unable to save review: user not identified." });
       return;
     }
 
@@ -371,11 +434,30 @@ const UserAccountPage = () => {
       author: profile.name,
       rating: Number(newReview.rating) || 5,
       note: newReview.note.trim(),
+      createdAt: new Date().toISOString(),
     };
 
-    setReviews((current) => [nextReview, ...current]);
-    setNewReview({ author: profile.name, rating: 5, note: "" });
-    setMessage({ type: "success", text: "Your review has been added." });
+    try {
+      const response = await fetch(`http://localhost:5000/user/${profile.id}/reviews`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ review: nextReview }),
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to save review.");
+      }
+
+      setReviews(data.reviews || [nextReview, ...reviews]);
+      const updatedProfile = { ...profile, reviews: data.reviews || [nextReview, ...profile.reviews] };
+      setProfile(updatedProfile);
+      saveStoredUser(updatedProfile);
+      setNewReview({ author: profile.name, rating: 5, note: "" });
+      setMessage({ type: "success", text: "Your review has been added." });
+    } catch (error) {
+      setMessage({ type: "error", text: error.message || "Unable to save review." });
+    }
   };
 
   const toggleWishlist = (tour) => {
@@ -459,8 +541,46 @@ const UserAccountPage = () => {
                 </form>
               ) : (
                 <form className="space-y-4" onSubmit={handleRegister}>
-                  <input type="text" name="name" value={form.name} onChange={handleAuthInput} placeholder="Full name" className="w-full rounded-xl border border-white/10 bg-slate-900 px-4 py-3 text-white outline-none placeholder:text-slate-400 focus:border-amber-400" required />
-                  <input type="email" name="email" value={form.email} onChange={handleAuthInput} placeholder="Email address" className="w-full rounded-xl border border-white/10 bg-slate-900 px-4 py-3 text-white outline-none placeholder:text-slate-400 focus:border-amber-400" required />
+                  <input
+                    type="text"
+                    name="name"
+                    value={form.name}
+                    onChange={handleAuthInput}
+                    onKeyDown={handleNameKeyDown}
+                    placeholder="Full name"
+                    className="w-full rounded-xl border border-white/10 bg-slate-900 px-4 py-3 text-white outline-none placeholder:text-slate-400 focus:border-amber-400"
+                    required
+                  />
+                  <input
+                    type="email"
+                    name="email"
+                    value={form.email}
+                    onChange={handleAuthInput}
+                    placeholder="Email address"
+                    className="w-full rounded-xl border border-white/10 bg-slate-900 px-4 py-3 text-white outline-none placeholder:text-slate-400 focus:border-amber-400"
+                    required
+                  />
+                  <input
+                    type="tel"
+                    name="phone"
+                    value={form.phone}
+                    onChange={handleAuthInput}
+                    onKeyDown={handlePhoneKeyDown}
+                    placeholder="Phone number"
+                    maxLength={10}
+                    className="w-full rounded-xl border border-white/10 bg-slate-900 px-4 py-3 text-white outline-none placeholder:text-slate-400 focus:border-amber-400"
+                    required
+                  />
+                  <input
+                    type="text"
+                    name="country"
+                    value={form.country}
+                    onChange={handleAuthInput}
+                    onKeyDown={handleNameKeyDown}
+                    placeholder="Country"
+                    className="w-full rounded-xl border border-white/10 bg-slate-900 px-4 py-3 text-white outline-none placeholder:text-slate-400 focus:border-amber-400"
+                    required
+                  />
 
                   <div className="relative">
                     <input

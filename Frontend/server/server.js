@@ -484,6 +484,62 @@ app.patch("/user/:id/profile", async (req, res) => {
   }
 });
 
+app.patch("/user/:id/reviews", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { review } = req.body;
+
+    if (!review || typeof review !== "object") {
+      return res.status(400).json({ error: "Review data is required" });
+    }
+
+    const normalizedReview = {
+      id: review.id || `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+      author: String(review.author || "").trim(),
+      rating: Number(review.rating) || 0,
+      note: String(review.note || "").trim(),
+      createdAt: review.createdAt || new Date().toISOString(),
+    };
+
+    if (!normalizedReview.author || !normalizedReview.note || normalizedReview.rating < 1 || normalizedReview.rating > 5) {
+      return res.status(400).json({ error: "Review must include author, note, and a rating between 1 and 5" });
+    }
+
+    const dbReady = await ensureDatabaseConnection();
+
+    if (!dbReady) {
+      const userIndex = fallbackStorage.users.findIndex((item) => item._id === id);
+      if (userIndex === -1) {
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      fallbackStorage.users[userIndex].reviews = fallbackStorage.users[userIndex].reviews || [];
+      fallbackStorage.users[userIndex].reviews.unshift(normalizedReview);
+
+      return res.json({ success: true, reviews: fallbackStorage.users[userIndex].reviews });
+    }
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ error: "Invalid user id" });
+    }
+
+    const user = await User.findByIdAndUpdate(
+      id,
+      { $push: { reviews: { $each: [normalizedReview], $position: 0 } } },
+      { new: true }
+    ).lean();
+
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    res.json({ success: true, reviews: user.reviews || [] });
+  } catch (error) {
+    console.error("UPDATE USER REVIEWS ERROR:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 app.patch("/user/:id/password", async (req, res) => {
   try {
     const { id } = req.params;
@@ -496,7 +552,7 @@ app.patch("/user/:id/password", async (req, res) => {
     const dbReady = await ensureDatabaseConnection();
 
     if (!dbReady) {
-      const userIndex = fallbackStorage.users.findIndex((item) => item._id === id);
+      const userIndex = fallbackStorage.users.findIndex((item) => item._id === id || item.id === id);
       if (userIndex === -1) {
         return res.status(404).json({ error: "User not found" });
       }

@@ -34,7 +34,7 @@ export const getStoredUser = () => {
 export const saveStoredUser = (user) => {
   const normalized = createDefaultUserProfile(user);
 
-  if (!normalized.email || !normalized.password) {
+  if (!normalized.email) {
     localStorage.removeItem(STORAGE_KEYS.user);
     return null;
   }
