@@ -7,8 +7,8 @@ const STORAGE_KEYS = {
 export const createDefaultUserProfile = (user = {}) => ({
   id: user.id || 'guest-user',
   name: user.name || 'Traveler',
-  email: user.email || 'traveler@example.com',
-  phone: user.phone || '+94 77 000 0000',
+  email: user.email || '',
+  phone: user.phone || '',
   profileImage: user.profileImage || 'https://ui-avatars.com/api/?name=' + encodeURIComponent(user.name || 'Traveler') + '&background=FBBF24&color=111827',
   password: user.password || '',
   bio: user.bio || 'Exploring the beauty of Sri Lanka, one journey at a time.',
@@ -22,16 +22,29 @@ export const createDefaultUserProfile = (user = {}) => ({
 export const getStoredUser = () => {
   try {
     const parsed = JSON.parse(localStorage.getItem(STORAGE_KEYS.user) || 'null');
-    return parsed ? { ...createDefaultUserProfile(parsed), ...parsed } : createDefaultUserProfile();
+    if (!parsed || !parsed.email) {
+      return null;
+    }
+    return { ...createDefaultUserProfile(parsed), ...parsed };
   } catch (error) {
-    return createDefaultUserProfile();
+    return null;
   }
 };
 
 export const saveStoredUser = (user) => {
   const normalized = createDefaultUserProfile(user);
+
+  if (!normalized.email || !normalized.password) {
+    localStorage.removeItem(STORAGE_KEYS.user);
+    return null;
+  }
+
   localStorage.setItem(STORAGE_KEYS.user, JSON.stringify(normalized));
   return normalized;
+};
+
+export const clearStoredUser = () => {
+  localStorage.removeItem(STORAGE_KEYS.user);
 };
 
 export const getStoredBookings = () => {

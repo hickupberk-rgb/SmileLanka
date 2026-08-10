@@ -289,35 +289,87 @@ app.post("/admin/login", async (req, res) => {
 });
 
 /* ---------------- REGISTER USER ---------------- */
+const sanitizeUser = (user) => {
+  if (!user) {
+    return null;
+  }
+
+  const safeUser = { ...user };
+  delete safeUser.password;
+  safeUser.id = safeUser._id || safeUser.id;
+  return safeUser;
+};
+
 app.post("/register", async (req, res) => {
   try {
-    const { name, email, phone } = req.body;
+    const { name, email, phone, password } = req.body;
 
-    console.log("REGISTER REQUEST:", req.body);
+    if (!name || !email || !password) {
+      return res.status(400).json({ error: "Name, email and password are required" });
+    }
+
+    const trimmedName = String(name).trim();
+    const normalizedEmail = String(email).trim().toLowerCase();
+    const trimmedPassword = String(password).trim();
+
+    if (!/^[A-Za-z][A-Za-z\s'.-]*$/.test(trimmedName)) {
+      return res.status(400).json({ error: "Full name cannot contain numbers or special characters." });
+    }
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
+      return res.status(400).json({ error: "Please enter a valid email address." });
+    }
+
+    if (trimmedPassword.length < 6) {
+      return res.status(400).json({ error: "Password must be at least 6 characters long." });
+    }
+
     const dbReady = await ensureDatabaseConnection();
 
     if (!dbReady) {
+      const existingUser = fallbackStorage.users.find((item) => item.email?.toLowerCase() === normalizedEmail);
+      if (existingUser) {
+        return res.status(409).json({ error: "User already exists with this email." });
+      }
+
       const user = {
         _id: createId(),
-        name,
-        email,
-        phone,
+        name: trimmedName,
+        email: normalizedEmail,
+        phone: phone || "",
+        password: hashPassword(trimmedPassword),
+        profileImage: "",
+        country: "Sri Lanka",
+        bio: "",
+        wishlist: [],
+        recentlyViewed: [],
+        reviews: [],
       };
       fallbackStorage.users.push(user);
-      return res.json({ userId: user._id, user });
+      return res.json({ userId: user._id, user: sanitizeUser(user) });
+    }
+
+    const existingUser = await User.findOne({ email: normalizedEmail });
+    if (existingUser) {
+      return res.status(409).json({ error: "User already exists with this email." });
     }
 
     const newUser = await User.create({
-      name,
-      email,
-      phone,
+      name: trimmedName,
+      email: normalizedEmail,
+      phone: phone || "",
+      password: hashPassword(trimmedPassword),
+      profileImage: "",
+      country: "Sri Lanka",
+      bio: "",
+      wishlist: [],
+      recentlyViewed: [],
+      reviews: [],
     });
-
-    console.log("USER SAVED:", newUser);
 
     res.json({
       userId: newUser._id,
-      user: newUser,
+      user: sanitizeUser(newUser.toObject ? newUser.toObject() : newUser),
     });
 
   } catch (error) {
@@ -326,7 +378,245 @@ app.post("/register", async (req, res) => {
   }
 });
 
+app.post("/login", async (req, res) => {
+  try {
+    const { email, password } = req.body;
+
+    if (!email || !password) {
+      return res.status(400).json({ error: "Email and password are required" });
+    }
+
+    const normalizedEmail = String(email).trim().toLowerCase();
+    const dbReady = await ensureDatabaseConnection();
+
+    if (!dbReady) {
+      const user = fallbackStorage.users.find((item) => item.email?.toLowerCase() === normalizedEmail);
+      if (!user || !comparePassword(password, user.password)) {
+        return res.status(401).json({ error: "Invalid email or password" });
+      }
+
+      return res.json({ success: true, user: sanitizeUser(user) });
+    }
+
+    const user = await User.findOne({ email: normalizedEmail }).lean();
+    if (!user || !comparePassword(password, user.password)) {
+      return res.status(401).json({ error: "Invalid email or password" });
+    }
+
+    res.json({ success: true, user: sanitizeUser(user) });
+  } catch (error) {
+    console.error("USER LOGIN ERROR:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get("/user/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const dbReady = await ensureDatabaseConnection();
+
+    if (!dbReady) {
+      const user = fallbackStorage.users.find((item) => item._id === id);
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+      return res.json({ user: sanitizeUser(user) });
+    }
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ error: "Invalid user id" });
+    }
+
+    const user = await User.findById(id).lean();
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    res.json({ user: sanitizeUser(user) });
+  } catch (error) {
+    console.error("GET USER ERROR:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.patch("/user/:id/profile", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, email, phone, country, bio, profileImage } = req.body;
+
+    const dbReady = await ensureDatabaseConnection();
+
+    const updateData = {};
+    if (name) updateData.name = name.trim();
+    if (email) updateData.email = String(email).trim().toLowerCase();
+    if (phone !== undefined) updateData.phone = phone || "";
+    if (country !== undefined) updateData.country = country || "Sri Lanka";
+    if (bio !== undefined) updateData.bio = bio || "";
+    if (profileImage !== undefined) updateData.profileImage = profileImage || "";
+
+    if (!dbReady) {
+      const userIndex = fallbackStorage.users.findIndex((item) => item._id === id);
+      if (userIndex === -1) {
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      fallbackStorage.users[userIndex] = {
+        ...fallbackStorage.users[userIndex],
+        ...updateData,
+      };
+
+      return res.json({ user: sanitizeUser(fallbackStorage.users[userIndex]) });
+    }
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ error: "Invalid user id" });
+    }
+
+    const user = await User.findByIdAndUpdate(id, updateData, { new: true }).lean();
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    res.json({ user: sanitizeUser(user) });
+  } catch (error) {
+    console.error("UPDATE USER PROFILE ERROR:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.patch("/user/:id/password", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { password } = req.body;
+
+    if (!password || String(password).trim().length < 6) {
+      return res.status(400).json({ error: "Password must be at least 6 characters long." });
+    }
+
+    const dbReady = await ensureDatabaseConnection();
+
+    if (!dbReady) {
+      const userIndex = fallbackStorage.users.findIndex((item) => item._id === id);
+      if (userIndex === -1) {
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      fallbackStorage.users[userIndex].password = hashPassword(String(password).trim());
+      return res.json({ success: true, user: sanitizeUser(fallbackStorage.users[userIndex]) });
+    }
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ error: "Invalid user id" });
+    }
+
+    const user = await User.findByIdAndUpdate(id, { password: hashPassword(String(password).trim()) }, { new: true }).lean();
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    res.json({ success: true, user: sanitizeUser(user) });
+  } catch (error) {
+    console.error("UPDATE USER PASSWORD ERROR:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 /* ---------------- BOOKING ---------------- */
+const getBookingPayload = (booking) => ({
+  ...booking,
+  id: booking._id || booking.id,
+  user: booking.userId || null,
+});
+
+const getUserBookings = async (identifier) => {
+  const normalized = String(identifier || "").trim();
+
+  if (!normalized) {
+    return { user: null, bookings: [] };
+  }
+
+  const dbReady = await ensureDatabaseConnection();
+
+  if (!dbReady) {
+    const user = fallbackStorage.users.find((item) =>
+      item._id === normalized || item.email?.toLowerCase() === normalized.toLowerCase()
+    ) || null;
+
+    const bookings = user
+      ? fallbackStorage.bookings.filter((booking) => booking.userId === user._id)
+      : [];
+
+    return {
+      user,
+      bookings: bookings.map((booking) => ({
+        ...booking,
+        id: booking._id || booking.id,
+        user: user ? { id: user._id, name: user.name, email: user.email } : null,
+      })),
+    };
+  }
+
+  let user = null;
+  if (mongoose.Types.ObjectId.isValid(normalized)) {
+    user = await User.findById(normalized).lean();
+  } else {
+    user = await User.findOne({ email: normalized.toLowerCase() }).lean();
+  }
+
+  if (!user) {
+    return { user: null, bookings: [] };
+  }
+
+  const bookings = await Booking.find({ userId: user._id }).populate("userId", "name email phone").sort({ createdAt: -1 }).lean();
+
+  return {
+    user,
+    bookings: bookings.map((booking) => ({
+      ...booking,
+      id: booking._id || booking.id,
+      user: booking.userId || null,
+    })),
+  };
+};
+
+app.get("/user/email/:email/bookings", async (req, res) => {
+  try {
+    const { email } = req.params;
+    const normalizedEmail = String(email || "").trim().toLowerCase();
+
+    if (!normalizedEmail) {
+      return res.status(400).json({ error: "Email is required" });
+    }
+
+    const { user, bookings } = await getUserBookings(normalizedEmail);
+
+    if (!user) {
+      return res.status(404).json({ error: "No user found for this email" });
+    }
+
+    res.json({ user, bookings });
+  } catch (error) {
+    console.error("USER BOOKINGS BY EMAIL ERROR:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get("/user/:identifier/bookings", async (req, res) => {
+  try {
+    const { identifier } = req.params;
+    const { user, bookings } = await getUserBookings(identifier);
+
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    res.json({ user, bookings });
+  } catch (error) {
+    console.error("USER BOOKINGS ERROR:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 app.post("/book", async (req, res) => {
   try {
     const { userId, service, date, guests } = req.body;

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { CalendarDays, Camera, Download, Heart, Lock, LogOut, MapPin, PencilLine, ShieldCheck, Star, Trash2, UserCircle2 } from "lucide-react";
+import { CalendarDays, Camera, Download, Eye, EyeOff, Heart, Lock, LogOut, MapPin, PencilLine, ShieldCheck, Star, Trash2, UserCircle2 } from "lucide-react";
 import {
   createDefaultUserProfile,
   getStoredBookings,
@@ -33,32 +33,56 @@ const sampleReviews = [
   { id: "rev-2", author: "Maya", rating: 4, note: "Loved the itinerary, especially the train ride through the hills." },
 ];
 
+const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const fullNamePattern = /^[A-Za-z][A-Za-z\s'.-]*$/;
+
 const UserAccountPage = () => {
   const [profile, setProfile] = useState(() => {
     const stored = getStoredUser();
-    return { ...createDefaultUserProfile(stored), ...stored };
+    if (stored) {
+      return { ...createDefaultUserProfile(stored), ...stored };
+    }
+
+    return createDefaultUserProfile({
+      id: "guest-user",
+      name: "Traveler",
+      email: "",
+      password: "",
+      profileImage: "https://ui-avatars.com/api/?name=Traveler&background=FBBF24&color=111827",
+    });
   });
   const [bookings, setBookings] = useState(() => getStoredBookings().length ? getStoredBookings() : sampleBookings);
   const [wishlist, setWishlist] = useState(() => getStoredWishlist().length ? getStoredWishlist() : sampleWishlist);
   const [recentlyViewed, setRecentlyViewed] = useState(sampleRecent);
   const [reviews, setReviews] = useState(sampleReviews);
   const [authMode, setAuthMode] = useState("login");
-  const [isLoggedIn, setIsLoggedIn] = useState(Boolean(profile.email && profile.password));
+  const [isLoggedIn, setIsLoggedIn] = useState(() => {
+    const stored = getStoredUser();
+    return Boolean(stored && stored.email && stored.password);
+  });
   const [message, setMessage] = useState({ type: "", text: "" });
+  const [showLoginPassword, setShowLoginPassword] = useState(false);
+  const [showRegisterPassword, setShowRegisterPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [form, setForm] = useState({
-    name: profile.name,
-    email: profile.email,
-    phone: profile.phone,
-    password: profile.password,
-    confirmPassword: profile.password,
-    country: profile.country,
-    bio: profile.bio,
+    name: "",
+    email: "",
+    phone: "",
+    password: "",
+    confirmPassword: "",
+    country: "",
+    bio: "",
   });
   const [newReview, setNewReview] = useState({ author: profile.name, rating: 5, note: "" });
 
   useEffect(() => {
+    if (!isLoggedIn || !profile.email || !profile.password) {
+      localStorage.removeItem("smilelanka_user_profile");
+      return;
+    }
+
     saveStoredUser(profile);
-  }, [profile]);
+  }, [profile, isLoggedIn]);
 
   useEffect(() => {
     saveStoredBookings(bookings);
@@ -78,13 +102,28 @@ const UserAccountPage = () => {
     setForm((current) => ({ ...current, [name]: value }));
   };
 
-  const handleRegister = (event) => {
+  const handleRegister = async (event) => {
     event.preventDefault();
     const trimmedName = form.name.trim();
     const trimmedEmail = form.email.trim().toLowerCase();
 
-    if (!trimmedName || !trimmedEmail || !form.password) {
-      setMessage({ type: "error", text: "Please fill in your name, email, and password." });
+    if (!trimmedName) {
+      setMessage({ type: "error", text: "Full name is required." });
+      return;
+    }
+
+    if (!fullNamePattern.test(trimmedName)) {
+      setMessage({ type: "error", text: "Full name cannot contain numbers or special characters." });
+      return;
+    }
+
+    if (!trimmedEmail || !emailPattern.test(trimmedEmail)) {
+      setMessage({ type: "error", text: "Please enter a valid email address." });
+      return;
+    }
+
+    if (!form.password || form.password.length < 6) {
+      setMessage({ type: "error", text: "Password must be at least 6 characters long." });
       return;
     }
 
@@ -93,32 +132,74 @@ const UserAccountPage = () => {
       return;
     }
 
-    const nextProfile = createDefaultUserProfile({
-      ...profile,
-      name: trimmedName,
-      email: trimmedEmail,
-      phone: form.phone,
-      country: form.country || profile.country,
-      bio: form.bio || profile.bio,
-      password: form.password,
-    });
+    try {
+      const response = await fetch("http://localhost:5000/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: trimmedName,
+          email: trimmedEmail,
+          phone: form.phone,
+          password: form.password,
+        }),
+      });
 
-    setProfile(nextProfile);
-    setForm({
-      name: nextProfile.name,
-      email: nextProfile.email,
-      phone: nextProfile.phone,
-      password: nextProfile.password,
-      confirmPassword: nextProfile.password,
-      country: nextProfile.country,
-      bio: nextProfile.bio,
-    });
-    setNewReview((current) => ({ ...current, author: nextProfile.name }));
-    setIsLoggedIn(true);
-    setMessage({ type: "success", text: "Account created successfully." });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || "Registration failed");
+      }
+
+      const nextProfile = createDefaultUserProfile({
+        ...profile,
+        ...data.user,
+        id: data.userId || data.user?.id || data.user?._id,
+        name: trimmedName,
+        email: trimmedEmail,
+        phone: form.phone,
+        password: form.password,
+      });
+
+      saveStoredUser(nextProfile);
+      await fetchBookingsByEmail(trimmedEmail);
+      setProfile(nextProfile);
+      setForm({
+        name: nextProfile.name,
+        email: nextProfile.email,
+        phone: nextProfile.phone,
+        password: nextProfile.password,
+        confirmPassword: nextProfile.password,
+        country: nextProfile.country,
+        bio: nextProfile.bio,
+      });
+      setNewReview((current) => ({ ...current, author: nextProfile.name }));
+      setIsLoggedIn(true);
+      setMessage({ type: "success", text: "Account created successfully." });
+    } catch (error) {
+      setMessage({ type: "error", text: error.message || "Registration failed." });
+    }
   };
 
-  const handleLogin = (event) => {
+  const fetchBookingsByEmail = async (email) => {
+    try {
+      const response = await fetch(`http://localhost:5000/user/email/${encodeURIComponent(email)}/bookings`);
+      const data = await response.json();
+
+      if (!response.ok) {
+        setBookings([]);
+        return;
+      }
+
+      setBookings((data.bookings || []).map((booking) => ({
+        ...booking,
+        id: booking.id || booking._id,
+      })));
+    } catch (error) {
+      console.error("Failed to fetch bookings by email:", error);
+      setBookings([]);
+    }
+  };
+
+  const handleLogin = async (event) => {
     event.preventDefault();
     const storedUser = getStoredUser();
 
@@ -128,10 +209,38 @@ const UserAccountPage = () => {
     }
 
     const normalizedEmail = form.email.trim().toLowerCase();
-    const passwordMatches = storedUser.email === normalizedEmail && storedUser.password === form.password;
+    const passwordMatches = Boolean(storedUser && storedUser.email === normalizedEmail && storedUser.password === form.password);
 
     if (!passwordMatches) {
-      setMessage({ type: "error", text: "No matching account found. Please register or check your details." });
+      const fallbackResponse = await fetch(`http://localhost:5000/user/email/${encodeURIComponent(normalizedEmail)}/bookings`);
+      const fallbackData = await fallbackResponse.json().catch(() => ({ bookings: [] }));
+
+      if (!fallbackResponse.ok || !fallbackData.user) {
+        setMessage({ type: "error", text: "No matching account found. Please register or check your details." });
+        setBookings([]);
+        return;
+      }
+
+      const nextProfile = createDefaultUserProfile({
+        ...fallbackData.user,
+        name: fallbackData.user.name || storedUser.name || "Traveler",
+        email: fallbackData.user.email || normalizedEmail,
+        phone: fallbackData.user.phone || storedUser.phone,
+      });
+
+      setProfile(nextProfile);
+      setForm({
+        name: nextProfile.name,
+        email: nextProfile.email,
+        phone: nextProfile.phone,
+        password: nextProfile.password,
+        confirmPassword: nextProfile.password,
+        country: nextProfile.country,
+        bio: nextProfile.bio,
+      });
+      setBookings((fallbackData.bookings || []).map((booking) => ({ ...booking, id: booking.id || booking._id })));
+      setIsLoggedIn(true);
+      setMessage({ type: "success", text: "Welcome back!" });
       return;
     }
 
@@ -145,6 +254,7 @@ const UserAccountPage = () => {
       country: storedUser.country,
       bio: storedUser.bio,
     });
+    await fetchBookingsByEmail(normalizedEmail);
     setIsLoggedIn(true);
     setMessage({ type: "success", text: "Welcome back!" });
   };
@@ -173,9 +283,9 @@ const UserAccountPage = () => {
     setMessage({ type: "success", text: "Profile saved successfully." });
   };
 
-  const handlePasswordChange = () => {
-    if (!form.password) {
-      setMessage({ type: "error", text: "Please enter a new password." });
+  const handlePasswordChange = async () => {
+    if (!form.password || form.password.length < 6) {
+      setMessage({ type: "error", text: "Password must be at least 6 characters long." });
       return;
     }
 
@@ -184,10 +294,29 @@ const UserAccountPage = () => {
       return;
     }
 
-    const updatedProfile = { ...profile, password: form.password };
-    setProfile(updatedProfile);
-    setForm((current) => ({ ...current, password: updatedProfile.password, confirmPassword: updatedProfile.password }));
-    setMessage({ type: "success", text: "Password updated successfully." });
+    try {
+      const userId = profile.id || profile._id;
+      if (userId) {
+        const response = await fetch(`http://localhost:5000/user/${userId}/password`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ password: form.password }),
+        });
+
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data.error || "Password update failed");
+        }
+      }
+
+      const updatedProfile = { ...profile, password: form.password };
+      setProfile(updatedProfile);
+      saveStoredUser(updatedProfile);
+      setForm((current) => ({ ...current, password: updatedProfile.password, confirmPassword: updatedProfile.password }));
+      setMessage({ type: "success", text: "Password updated successfully." });
+    } catch (error) {
+      setMessage({ type: "error", text: error.message || "Password update failed." });
+    }
   };
 
   const handleImageUpload = (event) => {
@@ -256,6 +385,14 @@ const UserAccountPage = () => {
   };
 
   const handleLogout = () => {
+    localStorage.removeItem("smilelanka_user_profile");
+    setProfile(createDefaultUserProfile({
+      id: "guest-user",
+      name: "Traveler",
+      email: "",
+      password: "",
+      profileImage: "https://ui-avatars.com/api/?name=Traveler&background=FBBF24&color=111827",
+    }));
     setIsLoggedIn(false);
     setMessage({ type: "success", text: "You have been logged out." });
   };
@@ -299,16 +436,71 @@ const UserAccountPage = () => {
               {authMode === "login" ? (
                 <form className="space-y-4" onSubmit={handleLogin}>
                   <input type="email" name="email" value={form.email} onChange={handleAuthInput} placeholder="Email address" className="w-full rounded-xl border border-white/10 bg-slate-900 px-4 py-3 text-white outline-none ring-0 placeholder:text-slate-400 focus:border-amber-400" required />
-                  <input type="password" name="password" value={form.password} onChange={handleAuthInput} placeholder="Password" className="w-full rounded-xl border border-white/10 bg-slate-900 px-4 py-3 text-white outline-none ring-0 placeholder:text-slate-400 focus:border-amber-400" required />
+                  <div className="relative">
+                    <input
+                      type={showLoginPassword ? "text" : "password"}
+                      name="password"
+                      value={form.password}
+                      onChange={handleAuthInput}
+                      placeholder="Password"
+                      className="w-full rounded-xl border border-white/10 bg-slate-900 px-4 py-3 pr-12 text-white outline-none ring-0 placeholder:text-slate-400 focus:border-amber-400"
+                      required
+                    />
+                    <button
+                      type="button"
+                      aria-label={showLoginPassword ? "Hide password" : "Show password"}
+                      onClick={() => setShowLoginPassword((prev) => !prev)}
+                      className="absolute inset-y-0 right-3 flex items-center text-slate-300 hover:text-white"
+                    >
+                      {showLoginPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                    </button>
+                  </div>
                   <button type="submit" className="w-full rounded-xl bg-amber-400 px-4 py-3 font-bold text-slate-950 transition hover:bg-amber-300">Login to account</button>
                 </form>
               ) : (
                 <form className="space-y-4" onSubmit={handleRegister}>
                   <input type="text" name="name" value={form.name} onChange={handleAuthInput} placeholder="Full name" className="w-full rounded-xl border border-white/10 bg-slate-900 px-4 py-3 text-white outline-none placeholder:text-slate-400 focus:border-amber-400" required />
                   <input type="email" name="email" value={form.email} onChange={handleAuthInput} placeholder="Email address" className="w-full rounded-xl border border-white/10 bg-slate-900 px-4 py-3 text-white outline-none placeholder:text-slate-400 focus:border-amber-400" required />
-                  <input type="tel" name="phone" value={form.phone} onChange={handleAuthInput} placeholder="Phone number" className="w-full rounded-xl border border-white/10 bg-slate-900 px-4 py-3 text-white outline-none placeholder:text-slate-400 focus:border-amber-400" />
-                  <input type="password" name="password" value={form.password} onChange={handleAuthInput} placeholder="Password" className="w-full rounded-xl border border-white/10 bg-slate-900 px-4 py-3 text-white outline-none placeholder:text-slate-400 focus:border-amber-400" required />
-                  <input type="password" name="confirmPassword" value={form.confirmPassword} onChange={handleAuthInput} placeholder="Confirm password" className="w-full rounded-xl border border-white/10 bg-slate-900 px-4 py-3 text-white outline-none placeholder:text-slate-400 focus:border-amber-400" required />
+
+                  <div className="relative">
+                    <input
+                      type={showRegisterPassword ? "text" : "password"}
+                      name="password"
+                      value={form.password}
+                      onChange={handleAuthInput}
+                      placeholder="Password"
+                      className="w-full rounded-xl border border-white/10 bg-slate-900 px-4 py-3 pr-12 text-white outline-none placeholder:text-slate-400 focus:border-amber-400"
+                      required
+                    />
+                    <button
+                      type="button"
+                      aria-label={showRegisterPassword ? "Hide password" : "Show password"}
+                      onClick={() => setShowRegisterPassword((prev) => !prev)}
+                      className="absolute inset-y-0 right-3 flex items-center text-slate-300 hover:text-white"
+                    >
+                      {showRegisterPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                    </button>
+                  </div>
+
+                  <div className="relative">
+                    <input
+                      type={showConfirmPassword ? "text" : "password"}
+                      name="confirmPassword"
+                      value={form.confirmPassword}
+                      onChange={handleAuthInput}
+                      placeholder="Confirm password"
+                      className="w-full rounded-xl border border-white/10 bg-slate-900 px-4 py-3 pr-12 text-white outline-none placeholder:text-slate-400 focus:border-amber-400"
+                      required
+                    />
+                    <button
+                      type="button"
+                      aria-label={showConfirmPassword ? "Hide confirm password" : "Show confirm password"}
+                      onClick={() => setShowConfirmPassword((prev) => !prev)}
+                      className="absolute inset-y-0 right-3 flex items-center text-slate-300 hover:text-white"
+                    >
+                      {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                    </button>
+                  </div>
                   <button type="submit" className="w-full rounded-xl bg-amber-400 px-4 py-3 font-bold text-slate-950 transition hover:bg-amber-300">Create account</button>
                 </form>
               )}
