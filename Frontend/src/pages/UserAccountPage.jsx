@@ -9,6 +9,7 @@ import {
   saveStoredUser,
   saveStoredWishlist,
 } from "../utils/userAccountStorage";
+import videos from "../assest/Video/video.js";
 
 const sampleBookings = [
   { id: "bk-101", service: "Golden Experience", date: "2026-09-12", guests: 2, status: "Upcoming", amount: 4800 },
@@ -565,7 +566,7 @@ const UserAccountPage = () => {
             </div>
           </div>
 
-          <div className="grid gap-8 md:grid-cols-2">
+          <div className="grid gap-8 md:grid-cols-2 items-stretch">
             <div className="rounded-3xl border border-white/10 bg-slate-950/60 p-6">
               <div className="mb-6 flex gap-3 border-b border-white/10 pb-3">
                 <button
@@ -701,19 +702,16 @@ const UserAccountPage = () => {
               )}
             </div>
 
-            <div className="rounded-3xl border border-amber-500/30 bg-gradient-to-br from-amber-500/10 via-transparent to-sky-500/10 p-6">
-              <h2 className="text-2xl font-bold text-amber-300">Included traveler features</h2>
-              <ul className="mt-6 space-y-3 text-slate-200">
-                <li>• User registration and secure login</li>
-                <li>• Personal profile with image upload</li>
-                <li>• Booking history and upcoming trips</li>
-                <li>• Booking cancellation and confirmation downloads</li>
-                <li>• Wishlist, recent tours, reviews, and ratings</li>
-              </ul>
-              <div className="mt-8 rounded-2xl border border-white/10 bg-slate-950/60 p-4 text-sm text-slate-300">
-                <p className="font-medium text-white">Pro tip</p>
-                <p className="mt-2">Use the account page to manage all traveler details in one place and keep your trip plans organized.</p>
-              </div>
+            <div className="rounded-3xl overflow-hidden border border-amber-500/30 bg-gradient-to-br from-amber-500/10 via-transparent to-sky-500/10 p-0 h-full">
+              <video
+                className="block h-full w-full object-cover"
+                src={videos.login}
+                autoPlay
+                loop
+                muted
+                playsInline
+                preload="auto"
+              />
             </div>
           </div>
         </div>

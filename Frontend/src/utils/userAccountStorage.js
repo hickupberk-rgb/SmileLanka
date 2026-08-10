@@ -12,17 +12,18 @@ export const createDefaultUserProfile = (user = {}) => {
     id: normalizedId,
     _id: normalizedObjectId,
     name: user.name || 'Traveler',
-  email: user.email || '',
-  phone: user.phone || '',
-  profileImage: user.profileImage || 'https://ui-avatars.com/api/?name=' + encodeURIComponent(user.name || 'Traveler') + '&background=FBBF24&color=111827',
-  password: user.password || '',
-  bio: user.bio || 'Exploring the beauty of Sri Lanka, one journey at a time.',
-  country: user.country || 'Sri Lanka',
-  wishlist: Array.isArray(user.wishlist) ? user.wishlist : [],
-  recentlyViewed: Array.isArray(user.recentlyViewed) ? user.recentlyViewed : [],
-  reviews: Array.isArray(user.reviews) ? user.reviews : [],
-  bookingHistory: Array.isArray(user.bookingHistory) ? user.bookingHistory : [],
-});
+    email: user.email || '',
+    phone: user.phone || '',
+    profileImage: user.profileImage || 'https://ui-avatars.com/api/?name=' + encodeURIComponent(user.name || 'Traveler') + '&background=FBBF24&color=111827',
+    password: user.password || '',
+    bio: user.bio || 'Exploring the beauty of Sri Lanka, one journey at a time.',
+    country: user.country || 'Sri Lanka',
+    wishlist: Array.isArray(user.wishlist) ? user.wishlist : [],
+    recentlyViewed: Array.isArray(user.recentlyViewed) ? user.recentlyViewed : [],
+    reviews: Array.isArray(user.reviews) ? user.reviews : [],
+    bookingHistory: Array.isArray(user.bookingHistory) ? user.bookingHistory : [],
+  };
+};
 
 export const getStoredUser = () => {
   try {
@@ -81,3 +82,5 @@ export const saveStoredWishlist = (wishlist) => {
   localStorage.setItem(STORAGE_KEYS.wishlist, JSON.stringify(normalized));
   return normalized;
 };
+
+
