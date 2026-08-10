@@ -9,12 +9,13 @@ import {
   saveStoredUser,
   saveStoredWishlist,
 } from "../utils/userAccountStorage";
+import BookingRouteMap from "../components/BookingRouteMap.jsx";
 import videos from "../assest/Video/video.js";
 
 const sampleBookings = [
-  { id: "bk-101", service: "Golden Experience", date: "2026-09-12", guests: 2, status: "Upcoming", amount: 4800 },
-  { id: "bk-102", service: "Hill Country Retreat", date: "2026-05-18", guests: 3, status: "Completed", amount: 3600 },
-  { id: "bk-103", service: "Wildlife Safari Adventure", date: "2026-11-02", guests: 2, status: "Upcoming", amount: 5900 },
+  { id: "bk-101", service: "Sigiriya Rock Fortress", date: "2026-09-12", guests: 2, status: "Upcoming", amount: 4800 },
+  { id: "bk-102", service: "Galle Fort", date: "2026-05-18", guests: 3, status: "Completed", amount: 3600 },
+  { id: "bk-103", service: "Yala National Park", date: "2026-11-02", guests: 2, status: "Upcoming", amount: 5900 },
 ];
 
 const sampleWishlist = [
@@ -66,6 +67,7 @@ const UserAccountPage = () => {
     const storedUser = getStoredUser();
     return storedUser ? storedUser.reviews || [] : sampleReviews;
   });
+  const [selectedBooking, setSelectedBooking] = useState(null);
   const [authMode, setAuthMode] = useState("login");
   const [isLoggedIn, setIsLoggedIn] = useState(() => {
     const stored = getStoredUser();
@@ -119,6 +121,22 @@ const UserAccountPage = () => {
     () => bookings.filter((booking) => booking.status === "Upcoming" || booking.status === "Confirmed"),
     [bookings]
   );
+
+  useEffect(() => {
+    if (!bookings.length) {
+      setSelectedBooking(null);
+      return;
+    }
+
+    const defaultBooking = upcomingTrips.length ? upcomingTrips[0] : bookings[0];
+
+    setSelectedBooking((prev) => {
+      if (prev && bookings.some((booking) => booking.id === prev.id)) {
+        return prev;
+      }
+      return defaultBooking;
+    });
+  }, [bookings, upcomingTrips]);
 
   const handleAuthInput = (event) => {
     const { name, value } = event.target;
@@ -455,7 +473,12 @@ const UserAccountPage = () => {
 
   const handleCancelBooking = (bookingId) => {
     setBookings((current) => current.filter((booking) => booking.id !== bookingId));
+    setSelectedBooking((current) => (current?.id === bookingId ? null : current));
     setMessage({ type: "success", text: "Booking cancelled successfully." });
+  };
+
+  const handleSelectBooking = (booking) => {
+    setSelectedBooking(booking);
   };
 
   const handleDownloadConfirmation = (booking) => {
@@ -801,12 +824,15 @@ const UserAccountPage = () => {
                         <p className="text-lg font-semibold text-white">{booking.service}</p>
                         <p className="text-sm text-slate-400">{booking.date} • {booking.guests} guest(s)</p>
                       </div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
                         <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${booking.status === "Upcoming" || booking.status === "Confirmed" ? "bg-emerald-500/15 text-emerald-300" : "bg-amber-500/15 text-amber-300"}`}>
                           {booking.status}
                         </span>
                         <button type="button" onClick={() => handleDownloadConfirmation(booking)} className="inline-flex items-center gap-2 rounded-full border border-amber-400/40 bg-amber-500/10 px-3 py-1.5 text-xs font-medium text-amber-200 hover:bg-amber-500/20">
                           <Download size={14} /> Download
+                        </button>
+                        <button type="button" onClick={() => handleSelectBooking(booking)} className={`inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-medium ${selectedBooking?.id === booking.id ? "border border-emerald-400/40 bg-emerald-500/20 text-emerald-200" : "border border-slate-500/30 bg-slate-950/80 text-slate-200 hover:bg-slate-900/90"}`}>
+                          <MapPin size={14} /> {selectedBooking?.id === booking.id ? "Selected" : "View route"}
                         </button>
                         <button type="button" onClick={() => handleCancelBooking(booking.id)} className="inline-flex items-center gap-2 rounded-full border border-rose-500/40 bg-rose-500/10 px-3 py-1.5 text-xs font-medium text-rose-200 hover:bg-rose-500/20">
                           <Trash2 size={14} /> Cancel
@@ -833,8 +859,15 @@ const UserAccountPage = () => {
                 <ul className="space-y-3">
                   {upcomingTrips.map((trip) => (
                     <li key={trip.id} className="rounded-2xl border border-white/10 bg-slate-950/70 p-3">
-                      <p className="font-semibold text-white">{trip.service}</p>
-                      <p className="text-sm text-slate-300">{trip.date} • {trip.guests} travelers</p>
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="font-semibold text-white">{trip.service}</p>
+                          <p className="text-sm text-slate-300">{trip.date} • {trip.guests} travelers</p>
+                        </div>
+                        <button type="button" onClick={() => handleSelectBooking(trip)} className={`rounded-full px-4 py-2 text-xs font-semibold ${selectedBooking?.id === trip.id ? "bg-emerald-500 text-slate-950" : "bg-amber-400 text-slate-950 hover:bg-amber-300"}`}>
+                          {selectedBooking?.id === trip.id ? "Selected" : "View route"}
+                        </button>
+                      </div>
                     </li>
                   ))}
                 </ul>
@@ -861,6 +894,14 @@ const UserAccountPage = () => {
                   </div>
                 ))}
               </div>
+            </div>
+
+            <div className="rounded-3xl border border-white/10 bg-white/5 p-6">
+              <div className="mb-4 flex items-center gap-3">
+                <MapPin className="text-amber-300" />
+                <h2 className="text-xl font-bold text-white">Selected itinerary route</h2>
+              </div>
+              <BookingRouteMap booking={selectedBooking} />
             </div>
 
             <div className="rounded-3xl border border-white/10 bg-white/5 p-6">

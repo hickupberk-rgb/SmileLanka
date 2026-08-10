@@ -12,6 +12,7 @@ import GalleryUpload from "./pages/GallaryUp.jsx";
 import Loader from "./components/Loader.jsx";
 import PackageTemplate from "./pages/packages/PackageTemplate.jsx";
 import ReadMoreAbout from "./pages/ReadMoreAbout.jsx";
+import MapPage from "./pages/MapPage.jsx";
 import GalleFort from "./pages/destinations/GalleFort.jsx"; // Added import
 import ScrollToTop from "./components/ScrollToTop.jsx";
 import AOS from 'aos';
@@ -89,6 +90,7 @@ const App = () => {
                 <Route path="/custom-tour" element={<CustomTour />} />
                 <Route path="/gallery" element={<Gallery />} />
                 <Route path="/gallery-upload" element={<GalleryUpload />} />
+                <Route path="/map" element={<MapPage />} />
                 <Route path="/account" element={<UserAccountPage />} />
                 <Route path="/destinations/galle-fort" element={<GalleFort />} />
                 <Route path="/book" element={<BookingForm/>} />
