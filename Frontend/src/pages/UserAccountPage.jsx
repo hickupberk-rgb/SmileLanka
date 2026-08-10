@@ -61,7 +61,10 @@ const UserAccountPage = () => {
   });
   const [wishlist, setWishlist] = useState(() => getStoredWishlist().length ? getStoredWishlist() : sampleWishlist);
   const [recentlyViewed, setRecentlyViewed] = useState(sampleRecent);
-  const [reviews, setReviews] = useState(sampleReviews);
+  const [reviews, setReviews] = useState(() => {
+    const storedUser = getStoredUser();
+    return storedUser ? storedUser.reviews || [] : sampleReviews;
+  });
   const [authMode, setAuthMode] = useState("login");
   const [isLoggedIn, setIsLoggedIn] = useState(() => {
     const stored = getStoredUser();
@@ -77,8 +80,8 @@ const UserAccountPage = () => {
       name: stored?.name || "",
       email: stored?.email || "",
       phone: stored?.phone || "",
-      password: stored?.password || "",
-      confirmPassword: stored?.password || "",
+      password: "",
+      confirmPassword: "",
       country: stored?.country || "",
       bio: stored?.bio || "",
     };
@@ -92,6 +95,10 @@ const UserAccountPage = () => {
 
     saveStoredUser(profile);
   }, [profile, isLoggedIn]);
+
+  useEffect(() => {
+    setNewReview((current) => ({ ...current, author: profile.name }));
+  }, [profile.name]);
 
   useEffect(() => {
     saveStoredBookings(bookings);
@@ -221,11 +228,12 @@ const UserAccountPage = () => {
         name: nextProfile.name,
         email: nextProfile.email,
         phone: nextProfile.phone,
-        password: nextProfile.password,
-        confirmPassword: nextProfile.password,
+        password: "",
+        confirmPassword: "",
         country: nextProfile.country,
         bio: nextProfile.bio,
       });
+      setReviews(nextProfile.reviews || []);
       setNewReview((current) => ({ ...current, author: nextProfile.name }));
       setIsLoggedIn(true);
       setMessage({ type: "success", text: "Account created successfully." });
@@ -256,7 +264,6 @@ const UserAccountPage = () => {
 
   const handleLogin = async (event) => {
     event.preventDefault();
-    const storedUser = getStoredUser();
 
     if (!form.email || !form.password) {
       setMessage({ type: "error", text: "Please enter your email and password." });
@@ -264,57 +271,48 @@ const UserAccountPage = () => {
     }
 
     const normalizedEmail = form.email.trim().toLowerCase();
-    const passwordMatches = Boolean(storedUser && storedUser.email === normalizedEmail && storedUser.password === form.password);
 
-    if (!passwordMatches) {
-      const fallbackResponse = await fetch(`http://localhost:5000/user/email/${encodeURIComponent(normalizedEmail)}/bookings`);
-      const fallbackData = await fallbackResponse.json().catch(() => ({ bookings: [] }));
+    try {
+      const response = await fetch("http://localhost:5000/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: normalizedEmail, password: form.password }),
+      });
 
-      if (!fallbackResponse.ok || !fallbackData.user) {
-        setMessage({ type: "error", text: "No matching account found. Please register or check your details." });
-        setBookings([]);
-        return;
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || "Invalid email or password.");
       }
 
       const nextProfile = createDefaultUserProfile({
-        ...fallbackData.user,
-        name: fallbackData.user.name || storedUser.name || "Traveler",
-        email: fallbackData.user.email || normalizedEmail,
-        phone: fallbackData.user.phone || storedUser.phone,
+        ...data.user,
+        email: normalizedEmail,
       });
 
       setProfile(nextProfile);
+      saveStoredUser(nextProfile);
       setForm({
         name: nextProfile.name,
         email: nextProfile.email,
         phone: nextProfile.phone,
-        password: nextProfile.password,
-        confirmPassword: nextProfile.password,
+        password: "",
+        confirmPassword: "",
         country: nextProfile.country,
         bio: nextProfile.bio,
       });
-      setBookings((fallbackData.bookings || []).map((booking) => ({ ...booking, id: booking.id || booking._id })));
+      setNewReview((current) => ({ ...current, author: nextProfile.name }));
+      setReviews(nextProfile.reviews || []);
+      await fetchBookingsByEmail(normalizedEmail);
       setIsLoggedIn(true);
       setMessage({ type: "success", text: "Welcome back!" });
-      return;
+    } catch (error) {
+      setMessage({ type: "error", text: error.message || "Unable to log in." });
+      setBookings([]);
+      setReviews([]);
     }
-
-    setProfile({ ...storedUser, email: normalizedEmail });
-    setForm({
-      name: storedUser.name,
-      email: normalizedEmail,
-      phone: storedUser.phone,
-      password: storedUser.password,
-      confirmPassword: storedUser.password,
-      country: storedUser.country,
-      bio: storedUser.bio,
-    });
-    await fetchBookingsByEmail(normalizedEmail);
-    setIsLoggedIn(true);
-    setMessage({ type: "success", text: "Welcome back!" });
   };
 
-  const handleProfileSave = (event) => {
+  const handleProfileSave = async (event) => {
     event.preventDefault();
     const updatedProfile = {
       ...profile,
@@ -325,17 +323,51 @@ const UserAccountPage = () => {
       bio: form.bio || profile.bio,
     };
 
-    setProfile(updatedProfile);
-    setForm({
-      name: updatedProfile.name,
-      email: updatedProfile.email,
-      phone: updatedProfile.phone,
-      password: profile.password,
-      confirmPassword: profile.password,
-      country: updatedProfile.country,
-      bio: updatedProfile.bio,
-    });
-    setMessage({ type: "success", text: "Profile saved successfully." });
+    const userId = profile.id || profile._id;
+    if (!userId || userId === "guest-user") {
+      setMessage({ type: "error", text: "Unable to save profile: user not identified." });
+      return;
+    }
+
+    try {
+      const response = await fetch(`http://localhost:5000/user/${userId}/profile`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: updatedProfile.name,
+          email: updatedProfile.email,
+          phone: updatedProfile.phone,
+          country: updatedProfile.country,
+          bio: updatedProfile.bio,
+        }),
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || "Profile update failed.");
+      }
+
+      const savedProfile = createDefaultUserProfile({
+        ...updatedProfile,
+        ...data.user,
+      });
+
+      setProfile(savedProfile);
+      saveStoredUser(savedProfile);
+      setForm({
+        name: savedProfile.name,
+        email: savedProfile.email,
+        phone: savedProfile.phone,
+        password: "",
+        confirmPassword: "",
+        country: savedProfile.country,
+        bio: savedProfile.bio,
+      });
+      setNewReview((current) => ({ ...current, author: savedProfile.name }));
+      setMessage({ type: "success", text: "Profile saved successfully." });
+    } catch (error) {
+      setMessage({ type: "error", text: error.message || "Failed to save profile." });
+    }
   };
 
   const handlePasswordChange = async () => {
@@ -350,7 +382,7 @@ const UserAccountPage = () => {
     }
 
     const userId = profile.id || profile._id;
-    if (!userId) {
+    if (!userId || userId === "guest-user") {
       setMessage({ type: "error", text: "Unable to update password: user not identified." });
       return;
     }
@@ -370,7 +402,7 @@ const UserAccountPage = () => {
       const updatedProfile = { ...profile, password: form.password };
       setProfile(updatedProfile);
       saveStoredUser(updatedProfile);
-      setForm((current) => ({ ...current, password: updatedProfile.password, confirmPassword: updatedProfile.password }));
+      setForm((current) => ({ ...current, password: "", confirmPassword: "" }));
       setMessage({ type: "success", text: "Password updated successfully." });
     } catch (error) {
       setMessage({ type: "error", text: error.message || "Password update failed." });
@@ -382,10 +414,38 @@ const UserAccountPage = () => {
     if (!file) return;
 
     const reader = new FileReader();
-    reader.onload = () => {
-      const nextProfile = { ...profile, profileImage: String(reader.result) };
+    reader.onload = async () => {
+      const imageValue = String(reader.result);
+      const userId = profile.id || profile._id;
+      const nextProfile = { ...profile, profileImage: imageValue };
+
       setProfile(nextProfile);
-      setMessage({ type: "success", text: "Profile image updated." });
+      saveStoredUser(nextProfile);
+
+      if (!userId || userId === "guest-user") {
+        setMessage({ type: "success", text: "Profile image updated." });
+        return;
+      }
+
+      try {
+        const response = await fetch(`http://localhost:5000/user/${userId}/profile`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ profileImage: imageValue }),
+        });
+
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data.error || "Unable to save profile image.");
+        }
+
+        const persistedProfile = { ...nextProfile, ...(data.user || {}) };
+        setProfile(persistedProfile);
+        saveStoredUser(persistedProfile);
+        setMessage({ type: "success", text: "Profile image updated." });
+      } catch (error) {
+        setMessage({ type: "error", text: error.message || "Unable to save profile image." });
+      }
     };
     reader.readAsDataURL(file);
   };
@@ -424,7 +484,8 @@ const UserAccountPage = () => {
       return;
     }
 
-    if (!profile.id) {
+    const userId = profile.id || profile._id;
+    if (!userId || userId === "guest-user") {
       setMessage({ type: "error", text: "Unable to save review: user not identified." });
       return;
     }
@@ -438,7 +499,7 @@ const UserAccountPage = () => {
     };
 
     try {
-      const response = await fetch(`http://localhost:5000/user/${profile.id}/reviews`, {
+      const response = await fetch(`http://localhost:5000/user/${userId}/reviews`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ review: nextReview }),
@@ -449,11 +510,12 @@ const UserAccountPage = () => {
         throw new Error(data.error || "Failed to save review.");
       }
 
-      setReviews(data.reviews || [nextReview, ...reviews]);
-      const updatedProfile = { ...profile, reviews: data.reviews || [nextReview, ...profile.reviews] };
+      const savedReviews = data.reviews || [nextReview, ...reviews];
+      setReviews(savedReviews);
+      const updatedProfile = { ...profile, reviews: savedReviews };
       setProfile(updatedProfile);
       saveStoredUser(updatedProfile);
-      setNewReview({ author: profile.name, rating: 5, note: "" });
+      setNewReview({ author: updatedProfile.name, rating: 5, note: "" });
       setMessage({ type: "success", text: "Your review has been added." });
     } catch (error) {
       setMessage({ type: "error", text: error.message || "Unable to save review." });
@@ -475,6 +537,16 @@ const UserAccountPage = () => {
       password: "",
       profileImage: "https://ui-avatars.com/api/?name=Traveler&background=FBBF24&color=111827",
     }));
+    setForm({
+      name: "",
+      email: "",
+      phone: "",
+      password: "",
+      confirmPassword: "",
+      country: "",
+      bio: "",
+    });
+    setAuthMode("login");
     setIsLoggedIn(false);
     setMessage({ type: "success", text: "You have been logged out." });
   };

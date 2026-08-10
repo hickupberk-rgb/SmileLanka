@@ -416,7 +416,7 @@ app.get("/user/:id", async (req, res) => {
     const dbReady = await ensureDatabaseConnection();
 
     if (!dbReady) {
-      const user = fallbackStorage.users.find((item) => item._id === id);
+      const user = fallbackStorage.users.find((item) => item._id === id || item.id === id);
       if (!user) {
         return res.status(404).json({ error: "User not found" });
       }
@@ -455,7 +455,7 @@ app.patch("/user/:id/profile", async (req, res) => {
     if (profileImage !== undefined) updateData.profileImage = profileImage || "";
 
     if (!dbReady) {
-      const userIndex = fallbackStorage.users.findIndex((item) => item._id === id);
+      const userIndex = fallbackStorage.users.findIndex((item) => item._id === id || item.id === id);
       if (userIndex === -1) {
         return res.status(404).json({ error: "User not found" });
       }
@@ -508,7 +508,7 @@ app.patch("/user/:id/reviews", async (req, res) => {
     const dbReady = await ensureDatabaseConnection();
 
     if (!dbReady) {
-      const userIndex = fallbackStorage.users.findIndex((item) => item._id === id);
+      const userIndex = fallbackStorage.users.findIndex((item) => item._id === id || item.id === id);
       if (userIndex === -1) {
         return res.status(404).json({ error: "User not found" });
       }

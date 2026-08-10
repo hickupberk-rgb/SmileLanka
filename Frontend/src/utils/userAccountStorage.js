@@ -5,7 +5,8 @@ const STORAGE_KEYS = {
 };
 
 export const createDefaultUserProfile = (user = {}) => ({
-  id: user.id || 'guest-user',
+  id: user.id || user._id || 'guest-user',
+  _id: user._id || user.id || null,
   name: user.name || 'Traveler',
   email: user.email || '',
   phone: user.phone || '',
