@@ -4,6 +4,7 @@ import { ToastContainer, toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import emailjs from "emailjs-com";
 import { useLocation } from "react-router-dom";
+import { getStoredUser } from "../utils/userAccountStorage";
 
 const services = [
   { name: "Cultural Triangle Explorer", price: 999 },
@@ -20,10 +21,11 @@ const AdvancedBookingWizard = () => {
   const location = useLocation();
   const today = new Date().toISOString().split("T")[0];
   const [step, setStep] = useState(0);
+  const storedUser = getStoredUser();
   const [data, setData] = useState({
-    name: "",
-    email: "",
-    phone: "",
+    name: storedUser?.name || "",
+    email: storedUser?.email || "",
+    phone: storedUser?.phone || "",
     service: "",
     date: "",
     time: "",

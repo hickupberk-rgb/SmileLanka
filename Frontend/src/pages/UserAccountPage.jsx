@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { CalendarDays, Camera, Download, Eye, EyeOff, Heart, Lock, LogOut, MapPin, PencilLine, ShieldCheck, Star, Trash2, UserCircle2 } from "lucide-react";
 import {
   createDefaultUserProfile,
@@ -787,6 +788,9 @@ const UserAccountPage = () => {
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
+            <Link to="/book" className="inline-flex items-center gap-2 rounded-full border border-amber-400 bg-amber-400/10 px-4 py-2 text-sm font-medium text-amber-200 transition hover:bg-amber-400/20 hover:text-amber-100">
+              <MapPin size={16} /> Create booking
+            </Link>
             <button type="button" onClick={handleLogout} className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-slate-200 transition hover:border-rose-400 hover:text-rose-200">
               <LogOut size={16} /> Logout
             </button>
