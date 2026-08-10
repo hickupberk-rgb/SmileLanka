@@ -41,6 +41,7 @@ import AdminAuthPage from "./pages/admin/AdminAuthPage.jsx";
 import AdminDashboard from "./pages/admin/AdminDashboard.jsx";
 import AdminCustomToursPage from "./pages/admin/AdminCustomToursPage.jsx";
 import ProtectedAdminRoute from "./components/ProtectedAdminRoute.jsx";
+import UserAccountPage from "./pages/UserAccountPage.jsx";
 
 const App = () => {
   const [loading, setLoading] = useState(true);
@@ -88,6 +89,7 @@ const App = () => {
                 <Route path="/custom-tour" element={<CustomTour />} />
                 <Route path="/gallery" element={<Gallery />} />
                 <Route path="/gallery-upload" element={<GalleryUpload />} />
+                <Route path="/account" element={<UserAccountPage />} />
                 <Route path="/destinations/galle-fort" element={<GalleFort />} />
                 <Route path="/book" element={<BookingForm/>} />
                 <Route path="/admin/auth" element={<AdminAuthPage />} />
