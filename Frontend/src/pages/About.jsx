@@ -2,7 +2,6 @@ import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import InteractiveMap from "../components/InteractiveMap.jsx";
 
 const About = () => {
  
@@ -545,8 +544,6 @@ const About = () => {
           </div>
         </div>
       </section>
-
-      <InteractiveMap />
 
       {/* SERVICES SECTION - Updated to match CardsSection design */}
       <section 

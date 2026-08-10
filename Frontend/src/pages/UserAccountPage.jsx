@@ -10,6 +10,7 @@ import {
   saveStoredWishlist,
 } from "../utils/userAccountStorage";
 import BookingRouteMap from "../components/BookingRouteMap.jsx";
+import LiveChatWidget from "../components/LiveChatWidget.jsx";
 import videos from "../assest/Video/video.js";
 
 const sampleBookings = [
@@ -471,10 +472,35 @@ const UserAccountPage = () => {
     reader.readAsDataURL(file);
   };
 
-  const handleCancelBooking = (bookingId) => {
-    setBookings((current) => current.filter((booking) => booking.id !== bookingId));
-    setSelectedBooking((current) => (current?.id === bookingId ? null : current));
-    setMessage({ type: "success", text: "Booking cancelled successfully." });
+  const handleCancelBooking = async (bookingId) => {
+    try {
+      const response = await fetch(`http://localhost:5000/user/bookings/${bookingId}/cancel`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+      });
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Unable to cancel booking.");
+      }
+
+      const updatedBooking = {
+        ...(data.booking || {}),
+        id: data.booking?.id || bookingId,
+      };
+
+      setBookings((current) => current.map((booking) => (
+        booking.id === bookingId ? updatedBooking : booking
+      )));
+
+      setSelectedBooking((current) => (
+        current?.id === bookingId ? updatedBooking : current
+      ));
+
+      setMessage({ type: "success", text: "Booking cancelled successfully." });
+    } catch (error) {
+      setMessage({ type: "error", text: error.message || "Failed to cancel booking." });
+    }
   };
 
   const handleSelectBooking = (booking) => {
@@ -490,7 +516,7 @@ const UserAccountPage = () => {
       `Date: ${booking.date}`,
       `Guests: ${booking.guests}`,
       `Status: ${booking.status}`,
-      `Amount: LKR ${booking.amount.toLocaleString()}`,
+      `Amount: $${(Number(booking.amount || 0) * 0.0027).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (LKR ${booking.amount.toLocaleString()})`,
       "",
       `Traveler: ${profile.name}`,
     ].join("\n");
@@ -841,7 +867,7 @@ const UserAccountPage = () => {
                     </div>
                     <div className="mt-3 flex items-center justify-between text-sm text-slate-300">
                       <span>Total</span>
-                      <span className="font-semibold text-amber-300">LKR {booking.amount.toLocaleString()}</span>
+                      <span className="font-semibold text-amber-300">${(Number(booking.amount || 0) * 0.0027).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                     </div>
                   </div>
                 )) : <p className="text-slate-300">No bookings yet. Start planning your next tour.</p>}
@@ -957,6 +983,7 @@ const UserAccountPage = () => {
           </div>
         </div>
       </div>
+      <LiveChatWidget />
     </section>
   );
 };

@@ -114,12 +114,6 @@ const Navbar = () => {
         </RouterLink>
       </li>
       <li className="hover:text-yellow-400 cursor-pointer transition-colors duration-300 font-medium">
-        <RouterLink to="/map" className="block h-full w-full py-3 px-4 rounded-xl hover:bg-gray-700/50 transition-all" onClick={() => setMobileMenuOpen(false)}>
-          Map
-        </RouterLink>
-      </li>
-      
-      <li className="hover:text-yellow-400 cursor-pointer transition-colors duration-300 font-medium">
         <RouterLink to="/gallery" className="block h-full w-full py-3 px-4 rounded-xl hover:bg-gray-700/50 transition-all" onClick={() => setMobileMenuOpen(false)}>
           Gallery
         </RouterLink>

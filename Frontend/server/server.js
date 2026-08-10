@@ -754,6 +754,47 @@ app.post("/book", async (req, res) => {
   }
 });
 
+app.patch("/user/bookings/:id/cancel", async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!id) {
+      return res.status(400).json({ error: "Booking id is required" });
+    }
+
+    if (!isDbReady()) {
+      const bookingIndex = fallbackStorage.bookings.findIndex((item) => item._id === id || item.id === id);
+      if (bookingIndex === -1) {
+        return res.status(404).json({ error: "Booking not found" });
+      }
+
+      fallbackStorage.bookings[bookingIndex] = {
+        ...fallbackStorage.bookings[bookingIndex],
+        status: "Cancelled",
+      };
+
+      const booking = fallbackStorage.bookings[bookingIndex];
+      return res.json({ success: true, booking: { ...booking, id: booking._id || booking.id } });
+    }
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ error: "Invalid booking ID" });
+    }
+
+    const booking = await Booking.findByIdAndUpdate(id, { status: "Cancelled" }, { new: true })
+      .populate("userId", "name email phone")
+      .lean();
+
+    if (!booking) {
+      return res.status(404).json({ error: "Booking not found" });
+    }
+
+    res.json({ success: true, booking: { ...booking, id: booking._id || booking.id, user: booking.userId || null } });
+  } catch (error) {
+    console.error("USER CANCEL BOOKING ERROR:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 app.patch("/admin/bookings/:id/status", requireAdminAuth, async (req, res) => {
   try {
     const { id } = req.params;
@@ -793,6 +834,39 @@ app.patch("/admin/bookings/:id/status", requireAdminAuth, async (req, res) => {
     res.json({ success: true, booking: { ...booking, user: booking.userId || null } });
   } catch (error) {
     console.error("UPDATE BOOKING STATUS ERROR:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.delete("/admin/bookings/:id", requireAdminAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!id) {
+      return res.status(400).json({ error: "Booking id is required" });
+    }
+
+    if (!isDbReady()) {
+      const bookingIndex = fallbackStorage.bookings.findIndex((item) => item._id === id || item.id === id);
+      if (bookingIndex === -1) {
+        return res.status(404).json({ error: "Booking not found" });
+      }
+
+      fallbackStorage.bookings.splice(bookingIndex, 1);
+      return res.json({ success: true });
+    }
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ error: "Invalid booking ID" });
+    }
+
+    const booking = await Booking.findByIdAndDelete(id).lean();
+    if (!booking) {
+      return res.status(404).json({ error: "Booking not found" });
+    }
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error("DELETE BOOKING ERROR:", error);
     res.status(500).json({ error: error.message });
   }
 });

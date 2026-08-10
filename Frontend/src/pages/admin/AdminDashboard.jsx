@@ -1,10 +1,21 @@
 import React, { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Bell, CalendarDays, LogOut, Menu, ShieldCheck, Sparkles, Users, Wallet } from "lucide-react";
+import { Bell, CalendarDays, LogOut, Menu, ShieldCheck, Sparkles, Trash2, Users, Wallet } from "lucide-react";
 
 const SESSION_KEY = "smilelanka_admin_session";
+const USD_EXCHANGE_RATE = 0.0027;
 
-const formatCurrency = (amount) => `LKR ${amount.toLocaleString()}`;
+const formatCurrency = (amount, currency = "USD") => {
+  const value = Number(amount) || 0;
+  if (currency === "USD") {
+    return `$${(value * USD_EXCHANGE_RATE).toLocaleString(undefined, {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    })}`;
+  }
+
+  return `LKR ${value.toLocaleString()}`;
+};
 
 const AdminDashboard = () => {
   const navigate = useNavigate();
@@ -15,6 +26,7 @@ const AdminDashboard = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [updatingBookingId, setUpdatingBookingId] = useState(null);
+  const [deletingBookingId, setDeletingBookingId] = useState(null);
   const [updatingCustomTourId, setUpdatingCustomTourId] = useState(null);
   const [activeFilter, setActiveFilter] = useState("All");
 
@@ -86,7 +98,7 @@ const AdminDashboard = () => {
     { label: "Total bookings", value: stats.total, icon: CalendarDays },
     { label: "Confirmed", value: stats.confirmed, icon: ShieldCheck },
     { label: "Pending", value: stats.pending, icon: Bell },
-    { label: "Revenue", value: formatCurrency(stats.revenue), icon: Wallet },
+    { label: "Revenue", value: formatCurrency(stats.revenue, "USD"), icon: Wallet },
   ];
 
   const pendingCount = bookings.filter((booking) => booking.status === "Pending").length;
@@ -105,11 +117,12 @@ const AdminDashboard = () => {
   };
 
   const handleStatusChange = async (bookingId, nextStatus) => {
-    setUpdatingBookingId(bookingId);
+    const normalizedBookingId = bookingId || "";
+    setUpdatingBookingId(normalizedBookingId);
 
     try {
       const session = JSON.parse(localStorage.getItem(SESSION_KEY) || "null");
-      const response = await fetch(`http://localhost:5000/admin/bookings/${bookingId}/status`, {
+      const response = await fetch(`http://localhost:5000/admin/bookings/${normalizedBookingId}/status`, {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
@@ -118,9 +131,11 @@ const AdminDashboard = () => {
         body: JSON.stringify({ status: nextStatus }),
       });
 
-      const data = await response.json();
+      const contentType = response.headers.get("content-type") || "";
+      const data = contentType.includes("application/json") ? await response.json() : null;
       if (!response.ok) {
-        throw new Error(data.error || "Failed to update booking status");
+        const text = data?.error || (await response.text());
+        throw new Error(text || "Failed to update booking status");
       }
 
       await fetchDashboardData();
@@ -128,6 +143,34 @@ const AdminDashboard = () => {
       console.error("Status update failed", error);
     } finally {
       setUpdatingBookingId(null);
+    }
+  };
+
+  const handleDeleteBooking = async (bookingId) => {
+    const normalizedBookingId = bookingId || "";
+    setDeletingBookingId(normalizedBookingId);
+
+    try {
+      const session = JSON.parse(localStorage.getItem(SESSION_KEY) || "null");
+      const response = await fetch(`http://localhost:5000/admin/bookings/${normalizedBookingId}`, {
+        method: "DELETE",
+        headers: {
+          ...(session?.token ? { Authorization: `Bearer ${session.token}` } : {}),
+        },
+      });
+
+      const contentType = response.headers.get("content-type") || "";
+      const data = contentType.includes("application/json") ? await response.json() : null;
+      if (!response.ok) {
+        const text = data?.error || (await response.text());
+        throw new Error(text || "Failed to delete booking");
+      }
+
+      await fetchDashboardData();
+    } catch (error) {
+      console.error("Delete booking failed", error);
+    } finally {
+      setDeletingBookingId(null);
     }
   };
 
@@ -266,15 +309,15 @@ const AdminDashboard = () => {
                             <p className="mt-1">{booking.date} • {booking.guests} guest(s)</p>
                           </div>
                           <div className="text-right">
-                            <p className="font-semibold text-amber-300">{formatCurrency(booking.amount || 0)}</p>
+                            <p className="font-semibold text-amber-300">{formatCurrency(booking.amount || 0, "USD")}</p>
                             <div className="mt-2 flex items-center justify-end gap-2">
                               <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${booking.status === "Confirmed" || booking.status === "Completed" ? "bg-emerald-500/15 text-emerald-300" : booking.status === "Cancelled" ? "bg-rose-500/15 text-rose-300" : "bg-amber-500/15 text-amber-300"}`}>
                                 {booking.status}
                               </span>
                               <select
                                 value={booking.status}
-                                onChange={(event) => handleStatusChange(booking._id, event.target.value)}
-                                disabled={updatingBookingId === booking._id}
+                                onChange={(event) => handleStatusChange(booking._id || booking.id, event.target.value)}
+                                disabled={updatingBookingId === (booking._id || booking.id)}
                                 className="rounded-full border border-amber-400/30 bg-slate-900/90 px-3 py-1.5 text-xs font-semibold text-white shadow-sm outline-none ring-0 transition hover:border-amber-400/50"
                               >
                                 <option value="Pending">Pending</option>
@@ -282,6 +325,16 @@ const AdminDashboard = () => {
                                 <option value="Completed">Completed</option>
                                 <option value="Cancelled">Cancelled</option>
                               </select>
+                              {booking.status === "Cancelled" && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteBooking(booking._id || booking.id)}
+                                  disabled={deletingBookingId === (booking._id || booking.id)}
+                                  className="inline-flex items-center gap-2 rounded-full border border-rose-500/40 bg-rose-500/10 px-3 py-1.5 text-xs font-medium text-rose-200 hover:bg-rose-500/20"
+                                >
+                                  <Trash2 size={14} /> Delete
+                                </button>
+                              )}
                             </div>
                           </div>
                         </div>
