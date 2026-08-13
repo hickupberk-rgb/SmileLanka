@@ -42,9 +42,15 @@ import AdminDashboard from "./pages/admin/AdminDashboard.jsx";
 import AdminCustomToursPage from "./pages/admin/AdminCustomToursPage.jsx";
 import ProtectedAdminRoute from "./components/ProtectedAdminRoute.jsx";
 import UserAccountPage from "./pages/UserAccountPage.jsx";
+import AuthLanding from "./pages/AuthLanding.jsx";
+import { getStoredUser } from "./utils/userAccountStorage";
 
 const App = () => {
   const [loading, setLoading] = useState(true);
+
+  const storedUser = getStoredUser();
+  const adminSession = JSON.parse(localStorage.getItem("smilelanka_admin_session") || "null");
+  const hasAnySession = Boolean(storedUser?.email) || Boolean(adminSession?.email && adminSession?.role === "admin");
 
   useEffect(() => {
     // Simulate loading time
@@ -132,6 +138,8 @@ const App = () => {
                   </>
                 } />
               </Routes>
+              {/* Show auth landing as an overlay on top of home when no session exists */}
+              {!hasAnySession && window.location.pathname === "/" && <AuthLanding />}
             </main>
             <Footer />
           </>

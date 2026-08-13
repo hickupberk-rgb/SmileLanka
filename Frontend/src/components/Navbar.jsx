@@ -3,12 +3,14 @@ import  { useEffect, useState, useRef } from "react";
 import { Link as ScrollLink } from "react-scroll";
 import { Link as RouterLink, useLocation as useRouterLocation, useNavigate as useRouterNavigate } from "react-router-dom";
 import { Menu, X } from "lucide-react";
+import { getStoredUser } from "../utils/userAccountStorage";
 
 const Navbar = () => {
   const [show, setShow] = useState(true);
   const [focusedIndex, setFocusedIndex] = useState(-1);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [isAdminLoggedIn, setIsAdminLoggedIn] = useState(false);
+  const [isUserLoggedIn, setIsUserLoggedIn] = useState(false);
   const location = useRouterLocation();
   const navigate = useRouterNavigate();
   const navItems = ["home", "about", "destinations", "contact", "gallery"];
@@ -74,6 +76,12 @@ const Navbar = () => {
     } catch (error) {
       setIsAdminLoggedIn(false);
     }
+    try {
+      const user = getStoredUser();
+      setIsUserLoggedIn(Boolean(user?.email));
+    } catch (e) {
+      setIsUserLoggedIn(false);
+    }
   }, [location.pathname]);
 
   // Determine if we're on the home page
@@ -118,11 +126,13 @@ const Navbar = () => {
           Gallery
         </RouterLink>
       </li>
-      <li className="hover:text-yellow-400 cursor-pointer transition-colors duration-300 font-medium">
-        <RouterLink to="/account" className="block h-full w-full py-3 px-4 rounded-xl hover:bg-gray-700/50 transition-all" onClick={() => setMobileMenuOpen(false)}>
-          My Account
-        </RouterLink>
-      </li>
+      {isUserLoggedIn && (
+        <li className="hover:text-yellow-400 cursor-pointer transition-colors duration-300 font-medium">
+          <RouterLink to="/account" className="block h-full w-full py-3 px-4 rounded-xl hover:bg-gray-700/50 transition-all" onClick={() => setMobileMenuOpen(false)}>
+            My Account
+          </RouterLink>
+        </li>
+      )}
       <li className="hover:text-yellow-400 cursor-pointer transition-colors duration-300 font-medium">
         {isHomePage ? (
           <ScrollLink to="contact" smooth={true} duration={600} offset={-100} className="block h-full w-full py-3 px-4 rounded-xl hover:bg-gray-700/50 transition-all" onClick={() => setMobileMenuOpen(false)}>
@@ -134,15 +144,17 @@ const Navbar = () => {
           </RouterLink>
         )}
       </li>
-      <li className="hover:text-yellow-400 cursor-pointer transition-colors duration-300 font-medium">
-        <RouterLink
-          to={isAdminLoggedIn ? "/admin" : "/admin/auth"}
-          className="block h-full w-full py-3 px-4 rounded-xl bg-amber-500/20 text-amber-200 hover:bg-amber-500/30 transition-all"
-          onClick={() => setMobileMenuOpen(false)}
-        >
-          {isAdminLoggedIn ? "Dashboard" : "Admin"}
-        </RouterLink>
-      </li>
+      {!isUserLoggedIn && (
+        <li className="hover:text-yellow-400 cursor-pointer transition-colors duration-300 font-medium">
+          <RouterLink
+            to={isAdminLoggedIn ? "/admin" : "/admin/auth"}
+            className="block h-full w-full py-3 px-4 rounded-xl bg-amber-500/20 text-amber-200 hover:bg-amber-500/30 transition-all"
+            onClick={() => setMobileMenuOpen(false)}
+          >
+            {isAdminLoggedIn ? "Dashboard" : "Admin"}
+          </RouterLink>
+        </li>
+      )}
     </>
   );
 
